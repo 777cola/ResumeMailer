@@ -1,5 +1,14 @@
 # ResumeMailer · 简历投递助手
 
+<p align="center">
+  <a href="https://777cola.github.io/ResumeMailer">
+    <img src="https://img.shields.io/badge/🌐_Live_Demo-在线演示-1A4B8C?style=for-the-badge" alt="在线演示">
+  </a>
+  <a href="https://github.com/777cola/ResumeMailer">
+    <img src="https://img.shields.io/badge/GitHub-仓库-181717?style=for-the-badge&logo=github" alt="GitHub">
+  </a>
+</p>
+
 > **Batch email sender for job seekers** — Send personalized application emails with a single click. Save as drafts or send directly. Optional AI-powered template filling.
 >
 > **求职者批量投递助手** — 一键批量发送个性化求职邮件。支持存草稿或直接发送，可选 AI 智能填充模板。
@@ -51,6 +60,56 @@ python main.py
 ```
 
 Then open your browser → **http://localhost:8765**
+
+## ☁️ Cloud Deployment / 云端部署
+
+### Option A: Render.com (一键部署, 免费)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/777cola/ResumeMailer)
+
+1. 点击上方按钮 → 登录 Render (GitHub OAuth)
+2. 选择 **Free** 计划
+3. 点击 **Deploy Web Service**
+4. 等待 2-3 分钟构建完成
+5. 访问 `https://resumemailer.onrender.com`
+
+> ⚠️ Render 免费实例 15 分钟无访问会休眠，再次访问会冷启动（约 30 秒）。
+> 如需持久运行，升级到 Starter 计划 ($7/月) 或使用 Docker 自部署。
+
+### Option B: Docker 自部署
+
+```bash
+docker build -t resumemailer .
+docker run -d -p 8765:8765 -v resumemailer-data:/data --name resumemailer resumemailer
+```
+
+支持在任何 Docker 主机上运行（VPS、NAS、云服务器等）。
+
+### Option C: Fly.io
+
+```bash
+# 安装 flyctl
+curl -L https://fly.io/install.sh | sh
+
+# 部署
+fly launch --image resumemailer --name resumemailer
+fly deploy
+fly volumes create data --size 1
+```
+
+### Option D: Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/ResumeMailer)
+
+### 注意
+
+| 平台 | 持久存储 | 费用 | 休眠 |
+|------|---------|------|------|
+| Render (Free) | ✅ 1GB 磁盘 | 免费 | 15分钟无访问休眠 |
+| Render (Starter) | ✅ 1GB+ | $7/月 | 不休眠 |
+| Fly.io | ✅ 3GB volume | 免费额度 | 不休眠 |
+| Railway | ✅ 1GB 磁盘 | $5 免费额度 | 不休眠 |
+| Docker (自部署) | ✅ 卷挂载 | 按VPS费用 | 可控 |
 
 ## 📖 User Guide / 使用指南
 
