@@ -1,7 +1,7 @@
 # ResumeMailer · 简历投递助手
 
 <p align="center">
-  <a href="https://777cola.github.io/ResumeMailer">
+  <a href="https://resumemailer.qijunhao.xyz">
     <img src="https://img.shields.io/badge/🌐_Live_Demo-在线演示-1A4B8C?style=for-the-badge" alt="在线演示">
   </a>
   <a href="https://github.com/777cola/ResumeMailer">
