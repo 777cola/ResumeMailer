@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ResumeMailer · 简历投递助手</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 顶部导航 -->
+  <header class="header">
+    <div class="header-title">
+      <h1>ResumeMailer</h1>
+      <span class="subtitle">简历投递助手</span>
+    </div>
+    <nav class="tabs" id="tabNav">
+      <button class="tab active" data-tab="config">📧 邮箱配置</button>
+      <button class="tab" data-tab="recipients">👥 收件人</button>
+      <button class="tab" data-tab="body">✍️ 正文</button>
+      <button class="tab" data-tab="attachments">📎 附件</button>
+      <button class="tab" data-tab="send">🚀 发送</button>
+      <button class="tab" data-tab="logs">📋 日志</button>
+    </nav>
+  </header>
+
+  <main class="main">
+    <!-- ═══ Tab 1: 邮箱配置 ═══ -->
+    <section id="tab-config" class="tab-content active">
+      <h2>📧 邮箱配置</h2>
+      <p class="desc">配置你的发件邮箱，所有信息仅存储在本地。</p>
+      <div class="card">
+        <div class="form-group">
+          <label>邮箱服务商</label>
+          <select id="emailPreset"><option value="">— 手动填写 —</option></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label>邮箱地址</label>
+            <input type="email" id="emailAddr" placeholder="your@email.com">
+          </div>
+          <div class="form-group flex-1">
+            <label>发件人名称（可选）</label>
+            <input type="text" id="senderName" placeholder="如：戚俊皓">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label>SMTP 服务器</label>
+            <input type="text" id="smtpHost" placeholder="smtp.qq.com">
+          </div>
+          <div class="form-group" style="width:100px">
+            <label>端口</label>
+            <input type="number" id="smtpPort" value="465">
+          </div>
+          <div class="form-group" style="width:100px">
+            <label>SSL</label>
+            <select id="useSsl"><option value="true">是</option><option value="false">否</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label>IMAP 服务器</label>
+            <input type="text" id="imapHost" placeholder="imap.qq.com">
+          </div>
+          <div class="form-group" style="width:100px">
+            <label>端口</label>
+            <input type="number" id="imapPort" value="993">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>SMTP/IMAP 授权码 <span class="tip">（非邮箱密码！QQ邮箱需在设置→账户中生成）</span></label>
+          <div class="input-with-btn">
+            <input type="password" id="authCode" placeholder="16位授权码">
+            <button class="btn btn-secondary" id="testConnBtn">测试连接</button>
+          </div>
+          <div id="testResult" class="test-result"></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="saveEmailBtn">💾 保存邮箱配置</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ Tab 2: 收件人 ═══ -->
+    <section id="tab-recipients" class="tab-content">
+      <h2>👥 收件人列表</h2>
+      <div class="card">
+        <div class="sub-tabs">
+          <button class="sub-tab active" data-method="excel">📄 上传 Excel</button>
+          <button class="sub-tab" data-method="ai">🤖 AI 自动填充</button>
+        </div>
+
+        <!-- 方法 A: Excel -->
+        <div id="method-excel" class="method-panel active">
+          <p class="desc">
+            下载模板 → 填写收件人信息 → 上传
+            <a href="/api/template/download" class="link-btn" download>⬇️ 下载 Excel 模板</a>
+          </p>
+          <div class="upload-zone" id="excelUploadZone">
+            <p>📂 点击或拖拽 Excel 文件到此处</p>
+            <input type="file" accept=".xlsx,.xls" id="excelFileInput" hidden>
+          </div>
+        </div>
+
+        <!-- 方法 B: AI -->
+        <div id="method-ai" class="method-panel">
+          <p class="desc">将公司信息、岗位描述粘贴到下方，AI 自动提取并生成模板。</p>
+          <div class="ai-config-mini">
+            <select id="aiProvider2"></select>
+            <input type="text" id="aiModel2" placeholder="模型名">
+            <input type="password" id="aiKey2" placeholder="API Key">
+          </div>
+          <textarea id="aiInput" rows="6" placeholder="示例：
+华泰资产 - 资产配置实习生 - hr@htasset.com
+中信证券 - 研究部实习生 - hr@citics.com
+..."></textarea>
+          <button class="btn btn-primary" id="aiFillBtn">🤖 AI 自动填充</button>
+          <div id="aiFillResult"></div>
+        </div>
+
+        <!-- 收件人预览表格 -->
+        <div id="recipientTableWrapper" style="display:none;margin-top:16px;">
+          <h3>📋 收件人列表 <span id="recipientCount" class="badge"></span></h3>
+          <div class="table-wrap">
+            <table id="recipientTable"><thead><tr>
+              <th>#</th><th>公司名称</th><th>收件人邮箱</th><th>邮件主题</th><th>操作</th>
+            </tr></thead><tbody></tbody></table>
+          </div>
+          <div id="parseErrors" class="errors"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ Tab 3: 正文 ═══ -->
+    <section id="tab-body" class="tab-content">
+      <h2>✍️ 邮件正文</h2>
+      <div class="card">
+        <!-- 个人信息（用于变量替换） -->
+        <details class="user-info-details" open>
+          <summary>👤 个人信息 <span class="tip">用于替换正文中的 {姓名} {学校} 等变量</span></summary>
+          <div class="user-info-form">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label>姓名</label>
+                <input type="text" id="userName" placeholder="你的姓名">
+              </div>
+              <div class="form-group flex-1">
+                <label>学校</label>
+                <input type="text" id="userSchool" placeholder="XX大学">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label>专业</label>
+                <input type="text" id="userMajor" placeholder="XX专业">
+              </div>
+              <div class="form-group flex-1">
+                <label>年级</label>
+                <input type="text" id="userGrade" placeholder="如：27届 / 大三 / 研二">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label>电话</label>
+                <input type="text" id="userPhone" placeholder="手机号">
+              </div>
+              <div class="form-group flex-1">
+                <label>邮箱</label>
+                <input type="email" id="userEmail" placeholder="联系邮箱">
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" id="saveUserInfoBtn">💾 保存个人信息</button>
+            </div>
+          </div>
+        </details>
+
+        <div class="body-layout">
+          <div class="body-editor-col">
+            <div class="form-group">
+              <label>正文模板 <span class="tip">支持 {公司名} {姓名} {学校} 等变量替换</span></label>
+              <textarea id="bodyEditor" rows="14"></textarea>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" id="saveBodyBtn">💾 保存正文</button>
+            </div>
+          </div>
+          <div class="body-example-col">
+            <div class="example-panel">
+              <h4>📝 参考示例</h4>
+              <div class="example-body">尊敬的HR：
+
+您好！
+
+我是来自XX大学 27届 X学院 X专业的XXX。看到贵司在招聘实习生，我符合相关要求，呈上简历请查收，希望能获得贵司的实习机会。
+
+这是我的联系方式：
+微信/电话：XXX
+邮箱：XXX</div>
+              <p class="tip" style="margin-top:8px;">💡 使用 <code>{变量名}</code> 可自动替换为每封邮件的对应信息</p>
+              <p class="tip">可用变量：<code>{公司名}</code> <code>{姓名}</code> <code>{学校}</code> <code>{专业}</code> <code>{年级}</code> <code>{技能}</code> <code>{邮箱}</code> <code>{电话}</code></p>
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <h3>🤖 AI 辅助撰写</h3>
+        <p class="desc">用 AI 修改或重新生成正文，修改后记得点击上方保存。</p>
+        <div class="ai-config-mini">
+          <select id="aiProvider3"></select>
+          <input type="text" id="aiModel3" placeholder="模型名">
+          <input type="password" id="aiKey3" placeholder="API Key">
+        </div>
+        <div class="chat-box" id="bodyChatBox">
+          <div class="chat-msgs" id="bodyChatMsgs">
+            <div class="chat-msg assistant">你好！我可以帮你撰写或修改求职邮件正文。请告诉我你的要求。</div>
+          </div>
+          <div class="chat-input-row">
+            <input type="text" id="bodyChatInput" placeholder="输入要求，如：帮我写一封自荐信..." class="flex-1">
+            <button class="btn btn-primary" id="bodyChatSend">发送</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ Tab 4: 附件 ═══ -->
+    <section id="tab-attachments" class="tab-content">
+      <h2>📎 附件管理</h2>
+      <p class="desc">上传的附件将附加到每一封邮件中。</p>
+      <div class="card">
+        <div class="upload-zone" id="attachUploadZone">
+          <p>📎 点击或拖拽文件到此处</p>
+          <input type="file" multiple id="attachFileInput" hidden>
+        </div>
+        <div id="attachList" class="file-list"></div>
+      </div>
+    </section>
+
+    <!-- ═══ Tab 5: 发送 ═══ -->
+    <section id="tab-send" class="tab-content">
+      <h2>🚀 预览 & 发送</h2>
+      <div class="card">
+        <div class="send-summary">
+          <div class="stat"><span class="stat-label">收件人</span><span id="sendTotal" class="stat-value">0</span></div>
+          <div class="stat"><span class="stat-label">附件</span><span id="sendAttachCount" class="stat-value">0</span></div>
+          <div class="stat"><span class="stat-label">发送速度</span><span id="sendRateDisplay" class="stat-value">20 封/分</span></div>
+        </div>
+
+        <div id="sendPreview" class="preview-area"></div>
+
+        <div class="send-actions">
+          <button class="btn btn-secondary" id="previewBtn">👁 逐封预览</button>
+          <button class="btn btn-warning" id="draftBtn">📥 全部存草稿</button>
+          <button class="btn btn-danger" id="sendBtn">⚠️ 直接发送</button>
+        </div>
+
+        <!-- 直接发送警告 -->
+        <div id="sendWarning" class="warning-overlay" style="display:none;">
+          <div class="warning-box">
+            <h2>⚠️ 危险操作确认</h2>
+            <p>邮件一旦发送将<strong>无法撤回</strong>。请确认：</p>
+            <ul>
+              <li>✅ 所有收件人邮箱正确无误</li>
+              <li>✅ 邮件正文没有错别字</li>
+              <li>✅ 附件已正确上传</li>
+            </ul>
+            <p class="warning-step" id="warningStep1">请输入 "确认发送" 以继续：</p>
+            <input type="text" id="warningInput" placeholder="输入「确认发送」">
+            <div class="warning-actions">
+              <button class="btn btn-secondary" id="warningCancel">取消</button>
+              <button class="btn btn-danger" id="warningConfirm" disabled>⚠️ 确认发送</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 发送进度 -->
+        <div id="sendProgress" class="progress-area" style="display:none;">
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+          </div>
+          <p id="progressText">准备中...</p>
+          <div class="progress-log" id="progressLog"></div>
+        </div>
+
+        <!-- 发送结果 -->
+        <div id="sendResult" style="display:none;">
+          <h3>📊 发送结果</h3>
+          <div class="result-summary" id="resultSummary"></div>
+          <div class="table-wrap"><table id="resultTable"><thead><tr>
+            <th>公司</th><th>邮箱</th><th>状态</th><th>错误</th>
+          </tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ Tab 6: 日志 ═══ -->
+    <section id="tab-logs" class="tab-content">
+      <h2>📋 发送日志</h2>
+      <div class="card">
+        <div class="form-actions">
+          <button class="btn btn-secondary" id="refreshLogsBtn">🔄 刷新</button>
+          <button class="btn btn-danger" id="clearLogsBtn">🗑 清空日志</button>
+        </div>
+        <div class="table-wrap"><table id="logTable"><thead><tr>
+          <th>时间</th><th>公司</th><th>邮箱</th><th>状态</th><th>备注</th>
+        </tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
