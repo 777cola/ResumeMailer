@@ -14,6 +14,7 @@
       <span class="subtitle">简历投递助手</span>
     </div>
     <nav class="tabs" id="tabNav">
+      <button class="tab" data-tab="guide">📖 上手</button>
       <button class="tab active" data-tab="config">📧 邮箱配置</button>
       <button class="tab" data-tab="recipients">👥 收件人</button>
       <button class="tab" data-tab="body">✍️ 正文</button>
@@ -24,6 +25,36 @@
   </header>
 
   <main class="main">
+    <!-- ═══ 0 上手引导 ═══ -->
+    <section id="tab-guide" class="tab-content">
+      <h2>📖 三分钟上手</h2>
+      <p class="desc">按顺序走一遍就能发信。每一步右侧的按钮会直接跳到对应页面。</p>
+      <div class="card">
+        <div id="guideChecklist" class="guide-steps"><p class="tip">加载中…</p></div>
+        <div class="form-actions" style="margin-top:16px;">
+          <button class="btn btn-secondary" id="demoBtn">🎲 载入示例数据</button>
+          <button class="btn btn-primary" id="dryBtn">▶️ 试跑一遍（不发信）</button>
+        </div>
+        <p class="tip" id="guideTip" style="margin-top:8px;">示例用的是 example.com 保留域名，不会发给任何真人。</p>
+      </div>
+
+      <div class="card">
+        <h3>容易踩的坑</h3>
+        <details class="faq"><summary>授权码在哪里？和登录密码一样吗？</summary>
+          <p>不一样，必须用授权码。QQ 邮箱：设置 → 账户 → 开启 SMTP → 生成授权码；163/126：设置 → POP3/SMTP/IMAP → 开启并设置授权码；Gmail：账号 → 安全性 → 应用专用密码；Outlook：账户 → 安全 → 应用密码。</p></details>
+        <details class="faq"><summary>「存草稿」和「直接发送」有什么区别？</summary>
+          <p>存草稿只是写进你邮箱的草稿箱，不会发出，可以在网页邮箱里逐封检查后再点发送；直接发送会立刻投递，无法撤回。第一次建议先存草稿。</p></details>
+        <details class="faq"><summary>为什么发到一半停了？</summary>
+          <p>常见三种：触发邮箱每日上限（QQ 个人约 50 封/天）、授权码失效、网络中断。失败的信不会记成「已投递」，修好后勾选「跳过已投递」重跑，只会补发失败的。</p></details>
+        <details class="faq"><summary>会被当成垃圾邮件吗？</summary>
+          <p>短时间大量同文邮件容易触发。建议降到 10 封/分钟、主题带姓名和岗位、别用「群发」「通知」这类词、别一次发几百封。</p></details>
+        <details class="faq"><summary>表格里多加一列「岗位」能用在正文里吗？</summary>
+          <p>能。除「公司名称 / 收件人邮箱 / 邮件主题」外的任何列都会变成变量，正文写 {岗位} 就替换成那一行的值。</p></details>
+        <details class="faq"><summary>我的授权码会被上传吗？</summary>
+          <p>不会。它只写在你电脑的 ~/.resumemailer/config.json（权限 600），程序直接连你自己的邮箱服务器。</p></details>
+      </div>
+    </section>
+
     <!-- ═══ 1 邮箱配置 ═══ -->
     <section id="tab-config" class="tab-content active">
       <h2>📧 邮箱配置</h2>

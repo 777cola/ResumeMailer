@@ -15,7 +15,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from config import (EMAIL_PRESETS, load_config, save_config, EmailConfig, ATTACH_DIR,
-                    LOG_FILE, sent_today, already_contacted, load_log)
+                    LOG_FILE, sent_today, already_contacted, load_log,
+                    DEFAULT_BODY_TEMPLATE, DEFAULT_SUBJECT_TEMPLATE)
 from engine.excel_parser import generate_template, parse_workbook, parse_tsv
 from engine.ai_filler import ai_chat, ai_fill_template, ai_generate_body, get_available_providers
 from engine.sender import test_connection, send_test
@@ -52,6 +53,89 @@ def index():
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+# ── 上手引导 ──
+
+DEMO_RECIPIENTS = [
+    {"seq": 1, "company": "示例科技（虚构）", "email": "hr@example.com", "subject": "",
+     "vars": {"岗位": "数据分析实习生", "HR": "张女士"}},
+    {"seq": 2, "company": "虚构资本（虚构）", "email": "campus@example.com", "subject": "",
+     "vars": {"岗位": "量化研究实习生", "HR": "李先生"}},
+    {"seq": 3, "company": "样例制造（虚构）", "email": "zhaopin@example.com",
+     "subject": "实习申请-{姓名}-{岗位}", "vars": {"岗位": "运营实习生", "HR": "王女士"}},
+]
+
+DEMO_BODY = """尊敬的{HR}：
+
+您好！我是{学校}{专业}的{姓名}，看到贵司在招{岗位}，附上简历请查收。
+
+电话/微信：{电话}
+邮箱：{邮箱}"""
+
+
+@app.get("/api/onboarding")
+def onboarding():
+    """上手清单的真实状态，前端据此打勾"""
+    cfg = load_config()
+    logs = load_log()
+    sent = [e for e in logs if e.get("mode") == "send" and e.get("success")]
+    attachments = [p for p in cfg.last_attachments if Path(p).is_file()]
+    steps = [
+        {"key": "email", "title": "配置发件邮箱",
+         "done": bool(cfg.email.email and cfg.email.auth_code),
+         "hint": "QQ 邮箱：设置 → 账户 → 生成授权码（不是登录密码）",
+         "tab": "config", "detail": cfg.email.email or ""},
+        {"key": "recipients", "title": "导入收件人",
+         "done": bool(cfg.last_recipients),
+         "hint": "下载模板填好上传，或从 Excel 直接复制粘贴",
+         "tab": "recipients",
+         "detail": f"{len(cfg.last_recipients)} 位" if cfg.last_recipients else ""},
+        {"key": "body", "title": "确认正文与主题",
+         "done": bool((cfg.body_template or "").strip() and (cfg.subject_template or "").strip()),
+         "hint": "变量写成 {姓名} {公司名} {岗位}，发送时逐封替换",
+         "tab": "body", "detail": ""},
+        {"key": "attachment", "title": "上传简历附件",
+         "done": bool(attachments),
+         "hint": "中文文件名也不会乱码；别忘了在发送页勾选",
+         "tab": "attachments",
+         "detail": f"{len(attachments)} 个文件" if attachments else ""},
+        {"key": "test", "title": "先发给自己",
+         "done": bool(cfg.last_test_at),
+         "hint": "确认排版、附件名、主题都对，再群发",
+         "tab": "send", "detail": cfg.last_test_at},
+        {"key": "sent", "title": "开始投递",
+         "done": bool(sent),
+         "hint": "建议先「全部存草稿」，在网页邮箱里检查后再发",
+         "tab": "send", "detail": f"已成功 {len(sent)} 封" if sent else ""},
+    ]
+    return {"steps": steps, "first_run": not cfg.email.email, "sent_total": len(sent)}
+
+
+DEMO_USER = {"name": "张小明", "school": "示例大学", "major": "金融学",
+             "grade": "27届", "phone": "13800000000", "email": "zhang@example.com"}
+
+
+@app.post("/api/demo/load")
+def demo_load():
+    """载入三家公司示例，让人不填表也能完整体验一遍"""
+    cfg = load_config()
+    cfg.last_recipients = [dict(r, vars=dict(r["vars"])) for r in DEMO_RECIPIENTS]
+    user_filled = []
+    for key, value in DEMO_USER.items():
+        if not getattr(cfg.user, key, ""):
+            setattr(cfg.user, key, value)
+            user_filled.append(key)
+    body_set = False
+    if not (cfg.body_template or "").strip() or cfg.body_template == DEFAULT_BODY_TEMPLATE:
+        cfg.body_template = DEMO_BODY
+        body_set = True
+    if not (cfg.subject_template or "").strip() or cfg.subject_template == DEFAULT_SUBJECT_TEMPLATE:
+        cfg.subject_template = "实习申请-{姓名}-{学校}-{岗位}"
+        body_set = True
+    save_config(cfg)
+    return {"ok": True, "recipients": cfg.last_recipients, "body_set": body_set,
+            "user_filled": user_filled, "variables": ["岗位", "HR"]}
 
 
 # ── 配置 ──
@@ -454,13 +538,14 @@ def send_to_self(data: dict):
                          rendered["html"], attachments)
     except Exception as e:
         return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
+    cfg.last_test_at = datetime.now().isoformat(timespec="seconds")
+    save_config(cfg)
     return {"ok": True, "msg": f"已发送到 {addr}，请到收件箱确认排版与附件名"}
 
 
 @app.post("/api/send/start")
 def send_start(data: dict):
     cfg = load_config()
-    _check_ready(cfg)
 
     recipients = _requested_recipients(data, cfg)
     if not recipients:
@@ -469,8 +554,10 @@ def send_start(data: dict):
         raise HTTPException(400, "单批最多 2000 封，请拆分发送")
 
     mode = data.get("send_mode", "draft")
-    if mode not in ("draft", "send"):
-        raise HTTPException(400, "send_mode 只能是 draft 或 send")
+    if mode not in ("draft", "send", "dry"):
+        raise HTTPException(400, "send_mode 只能是 draft / send / dry")
+    if mode != "dry":            # 试跑不连服务器，不需要邮箱
+        _check_ready(cfg)
 
     attachments = _requested_attachments(data, cfg)
     body = data.get("body", cfg.body_template)

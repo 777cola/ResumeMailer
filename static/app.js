@@ -70,6 +70,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     $('tab-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'send') loadPreview();
     if (tab.dataset.tab === 'logs') loadLogs();
+    if (tab.dataset.tab === 'guide') loadGuide();
   });
 });
 
@@ -661,7 +662,8 @@ async function pollJob() {
   $('progressFill').style.width = pct + '%';
   $('progressText').textContent = `${st.done} / ${st.total}（成功 ${st.success}，失败 ${st.failed}）`;
   $('progressLog').innerHTML = st.results.slice(-12).map(r => {
-    const icon = r.status === 'sent' ? '✅' : r.status === 'draft' ? '📥' : r.status === 'skipped' ? '⏭' : '❌';
+    const icon = r.status === 'sent' ? '✅' : r.status === 'draft' ? '📥'
+      : r.status === 'dry' ? '🧪' : r.status === 'skipped' ? '⏭' : '❌';
     return `<p class="${r.success ? 'success' : 'error'}">${icon} ${esc(r.company || r.email)}${r.error ? ' — ' + esc(r.error) : ''}</p>`;
   }).join('');
   $('progressLog').scrollTop = $('progressLog').scrollHeight;
@@ -678,6 +680,7 @@ async function pollJob() {
     toast(`已存入草稿箱：${st.draft_box || 'Drafts'}`, 'info', 6000);
   }
   if (st.status === 'error') toast('批次异常：' + st.error, 'error', 8000);
+  else if (st.mode === 'dry') toast('试跑完成，没有真的发出', 'info', 5000);
   else if (st.stopped) toast(st.stopped, 'info', 7000);
   else toast('批次完成', 'success');
 }
@@ -702,7 +705,10 @@ function renderResults(st) {
   $('sendResult').style.display = 'block';
   const summary = $('resultSummary');
   const totalDone = st.success + st.failed + st.skipped;
-  if (st.failed === 0 && st.skipped === 0) {
+  if (st.mode === 'dry') {
+    summary.textContent = `🧪 试跑完成：${st.success} 封已完整组装（正文、主题、附件），但没有真的发出`;
+    summary.style.background = '#eef3fa'; summary.style.color = '#1A4B8C';
+  } else if (st.failed === 0 && st.skipped === 0) {
     summary.textContent = `✅ 全部成功：${st.success} 封${st.mode === 'send' ? '已发送' : '已存入草稿箱'}`;
     summary.style.background = '#e8f5e9'; summary.style.color = '#2e7d32';
   } else {
@@ -710,13 +716,13 @@ function renderResults(st) {
     summary.style.background = st.success ? '#fff3e0' : '#fbe9e7';
     summary.style.color = st.success ? '#b45309' : '#b3261e';
   }
-  if (st.failed) {
+  if (st.failed && st.mode !== 'dry') {
     summary.textContent += ' — 修好原因后回本页重跑，勾选「跳过已投递」就只会补发失败的。';
   }
   const tbody = $('resultTable').querySelector('tbody');
   tbody.innerHTML = (st.results || []).map(r => {
     const icon = r.status === 'sent' ? '✅ 已发送' : r.status === 'draft' ? '📥 存草稿'
-      : r.status === 'skipped' ? '⏭ 跳过' : '❌ 失败';
+      : r.status === 'dry' ? '🧪 试跑' : r.status === 'skipped' ? '⏭ 跳过' : '❌ 失败';
     return `<tr><td>${esc(r.company)}</td><td>${esc(r.email)}</td><td>${esc(r.subject)}</td>
       <td>${icon}</td><td style="color:${r.success ? '#888' : '#b3261e'}">${esc(r.error || '-')}</td></tr>`;
   }).join('');
@@ -747,6 +753,68 @@ $('clearLogsBtn').addEventListener('click', async () => {
   await api('DELETE', '/api/logs');
   loadLogs();
   toast('日志已清空', 'success');
+});
+
+// ── 上手引导 ──
+function switchTab(name) {
+  const tab = document.querySelector(`.tab[data-tab="${name}"]`);
+  if (tab) tab.click();
+}
+
+async function loadGuide() {
+  let data;
+  try { data = await api('GET', '/api/onboarding'); } catch (e) { return null; }
+  const box = $('guideChecklist');
+  box.innerHTML = data.steps.map((s, i) => `
+    <div class="guide-step ${s.done ? 'done' : ''}">
+      <span class="gs-num">${s.done ? '✓' : i + 1}</span>
+      <div class="gs-body">
+        <div class="gs-title">${esc(s.title)}${s.done ? ' <span class="gs-badge">完成</span>' : ''}</div>
+        <div class="gs-hint">${esc(s.hint)}${s.detail ? ' · ' + esc(s.detail) : ''}</div>
+      </div>
+      <button class="btn ${s.done ? 'btn-secondary' : 'btn-primary'} btn-xs" data-goto="${esc(s.tab)}">${s.done ? '再看' : '去完成'}</button>
+    </div>`).join('');
+  box.querySelectorAll('[data-goto]').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.goto));
+  });
+  const done = data.steps.filter(s => s.done).length;
+  $('guideTip').textContent = done === data.steps.length
+    ? '全部完成了。以后想复看这份清单，随时回到这一页。'
+    : (data.first_run
+        ? '第一次用？先点「载入示例数据」，再点「试跑一遍」，整个流程不用真发信就能看明白。'
+        : '示例用的是 example.com 保留域名，不会发给任何真人。');
+  return data;
+}
+
+$('demoBtn').addEventListener('click', async () => {
+  try {
+    const res = await api('POST', '/api/demo/load', {});
+    config = await api('GET', '/api/config');
+    recipients = (res.recipients || []).map(r => ({
+      seq: r.seq, company: r.company || '', email: r.email || '',
+      subject: r.subject || '', vars: r.vars || {},
+    }));
+    renderRecipients();
+    updateVarHint();
+    $('bodyEditor').value = config.body_template || '';
+    $('subjectEditor').value = config.subject_template || '';
+    const u = config.user || {};
+    $('userName').value = u.name || '';
+    $('userSchool').value = u.school || '';
+    $('userMajor').value = u.major || '';
+    $('userGrade').value = u.grade || '';
+    $('userPhone').value = u.phone || '';
+    $('userEmail').value = u.email || '';
+    await loadGuide();
+    toast(res.user_filled && res.user_filled.length
+      ? '已载入示例数据（含示例个人信息，记得改成你自己的）'
+      : '已载入 3 条示例，接着点「试跑一遍」', 'success', 6000);
+  } catch (e) { toast(e.message, 'error'); }
+});
+
+$('dryBtn').addEventListener('click', () => {
+  if (!recipients.length) { toast('先载入示例数据，或去「收件人」页导入你的表格', 'error'); return; }
+  startSending('dry');
 });
 
 // ── 初始化 ──
@@ -809,6 +877,9 @@ async function init() {
   renderRecipients();
   updateVarHint();
   await loadAttachments(false);
+
+  const guide = await loadGuide();
+  if (guide && guide.first_run && !recipients.length) switchTab('guide');
 
   if (config.running_job) {
     currentJob = config.running_job;

@@ -223,3 +223,19 @@ table tr:hover td { background: #f5f8fc; }
 .file-check { display: flex; align-items: center; gap: 8px; cursor: pointer; flex: 1; }
 .file-check input { width: 16px; height: 16px; }
 .warn-line { color: #8a4b00; }
+
+/* ── v3: 上手引导 ── */
+.guide-steps { display: flex; flex-direction: column; gap: 8px; }
+.guide-step { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid #e8edf5; border-radius: var(--radius); background: #fafbfc; }
+.guide-step.done { background: #f4f9f4; border-color: #cfe8d5; }
+.gs-num { width: 26px; height: 26px; flex: none; border-radius: 50%; background: #e4e7eb; color: #555; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.guide-step.done .gs-num { background: #2e7d32; color: #fff; }
+.gs-body { flex: 1; min-width: 0; }
+.gs-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.gs-hint { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.gs-badge { display: inline-block; font-size: 11px; font-weight: 500; color: #2e7d32; background: #e8f5e9; border-radius: 10px; padding: 1px 8px; margin-left: 6px; }
+.faq { border-bottom: 1px solid #eef1f5; padding: 6px 0; }
+.faq:last-child { border-bottom: none; }
+.faq summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--primary); padding: 4px 0; }
+.faq p { font-size: 13px; color: #555; line-height: 1.75; margin: 6px 0 4px; }
+@media (max-width: 640px) { .guide-step { align-items: flex-start; flex-wrap: wrap; } .gs-body { flex: 1 1 60%; } }

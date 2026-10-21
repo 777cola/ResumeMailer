@@ -97,6 +97,7 @@ class AppConfig:
     cc_self: bool = False           # 抄送自己一份
     last_attachments: list = None
     last_recipients: list = None    # 刷新页面后仍在
+    last_test_at: str = ""          # 上次「发给自己」的时间
 
     def __post_init__(self):
         if self.email is None:
@@ -137,6 +138,7 @@ def load_config() -> AppConfig:
         cfg.cc_self = data.get("cc_self", False)
         cfg.last_attachments = data.get("last_attachments", [])
         cfg.last_recipients = data.get("last_recipients", [])
+        cfg.last_test_at = data.get("last_test_at", "")
         return cfg
     except Exception as e:
         # 配置读坏了不要静默丢掉：留一份现场再回退默认值
@@ -163,6 +165,7 @@ def save_config(cfg: AppConfig):
         "cc_self": cfg.cc_self,
         "last_attachments": cfg.last_attachments,
         "last_recipients": cfg.last_recipients,
+        "last_test_at": cfg.last_test_at,
     }
     tmp = CONFIG_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

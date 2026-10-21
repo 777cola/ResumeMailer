@@ -210,6 +210,57 @@ def test_send_batch_cancel():
         sender._SmtpLink = orig
 
 
+def test_dry_run_never_touches_network():
+    """试跑只组装消息，不能创建任何连接，也不吃每日额度"""
+    class Boom:
+        def __init__(self, *a, **k):
+            raise AssertionError("试跑不应该创建 SMTP/IMAP 连接")
+
+    orig_link, orig_sink = sender._SmtpLink, sender._DraftSink
+    sender._SmtpLink = Boom
+    sender._DraftSink = Boom
+    try:
+        from config import EmailConfig
+        recs = [{"company": f"C{i}", "email": f"a{i}@x.com"} for i in range(3)]
+        out = sender.send_batch(EmailConfig(email="me@qq.com"), recs, "hi {公司名}",
+                                "t-{公司名}", [], send_mode="dry", rate=60, daily_limit=1)
+        assert [r["status"] for r in out["results"]] == ["dry", "dry", "dry"], out["results"]
+        assert all(r["success"] for r in out["results"])
+        assert out["stopped"] == ""
+    finally:
+        sender._SmtpLink, sender._DraftSink = orig_link, orig_sink
+
+
+def test_job_counters_treat_dry_as_success(monkeypatch=None):
+    import engine.jobs as jobs
+
+    class FakeJob(dict):
+        pass
+
+    job = FakeJob(id="t", status="running", mode="dry", total=2, done=0, success=0,
+                  failed=0, skipped=0, started_at="", finished_at="", error="",
+                  stopped="", draft_box="", results=[], cancel=threading.Event())
+    orig = jobs.send_batch
+    rows = [
+        {"company": "A", "email": "a@x.com", "status": "dry", "success": True, "error": "", "subject": "s"},
+        {"company": "B", "email": "b@x.com", "status": "dry", "success": True, "error": "", "subject": "s"},
+    ]
+
+    def fake_send_batch(**kw):
+        progress = kw.get("progress")
+        for r in rows:
+            if progress:
+                progress(r)
+        return {"results": rows, "stopped": "", "draft_box": ""}
+
+    jobs.send_batch = fake_send_batch
+    try:
+        jobs._run(job, None, [], "b", "s", [], 60, {}, 0, False)
+    finally:
+        jobs.send_batch = orig
+    assert job["success"] == 2 and job["failed"] == 0, dict(job)
+
+
 def test_auth_error_stops_batch():
     class FakeLink:
         def __init__(self, cfg):

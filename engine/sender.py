@@ -358,9 +358,10 @@ def send_batch(
         raise ValueError(f"附件总大小超过 {MAX_ATTACH_MB}MB（{_attachment_total_mb(attachments):.1f}MB），"
                          f"多数邮箱会直接退回，请压缩后重试")
 
-    interval = 60.0 / max(1, int(rate or 20))
+    is_dry = send_mode == "dry"
+    interval = 0 if is_dry else 60.0 / max(1, int(rate or 20))
     link = _SmtpLink(cfg) if send_mode == "send" else None
-    sink = _DraftSink(cfg) if send_mode != "send" else None
+    sink = _DraftSink(cfg) if send_mode == "draft" else None
     sent_this_run = 0
     started = time.monotonic()
 
@@ -382,7 +383,7 @@ def send_batch(
                           "error": "已取消，未发送"})
                 break
 
-            if daily_limit and (daily_sent + sent_this_run) >= daily_limit:
+            if not is_dry and daily_limit and (daily_sent + sent_this_run) >= daily_limit:
                 stopped = f"已达每日上限 {daily_limit} 封，剩余 {total - idx} 封未发"
                 for rest in recipients[idx:]:
                     emit({"company": rest.get("company", ""), "email": rest.get("email", ""),
@@ -398,7 +399,11 @@ def send_batch(
             try:
                 msg = build_message(cfg, to_addr, rendered["subject"], rendered["body"],
                                     rendered["html"], attachments, cc_self)
-                if send_mode == "send":
+                if is_dry:
+                    # 试跑：消息真的组装好了（附件可读、编码正确），但不发出去
+                    result.update(success=True, status="dry")
+                    time.sleep(0.15)
+                elif send_mode == "send":
                     link.send(msg)
                     result.update(success=True, status="sent")
                     sent_this_run += 1

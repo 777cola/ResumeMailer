@@ -61,9 +61,7 @@ def _run(job: dict, cfg_email, recipients, body, subject_template, attachments,
     logs = []
 
     def on_result(r):
-        if r["status"] == "sent":
-            job["success"] += 1
-        elif r["status"] == "draft":
+        if r["status"] in ("sent", "draft", "dry"):
             job["success"] += 1
         elif r["status"] == "skipped":
             job["skipped"] += 1
@@ -106,7 +104,8 @@ def _run(job: dict, cfg_email, recipients, body, subject_template, attachments,
         job["status"] = "error"
         job["error"] = str(e)[:500]
     finally:
-        append_logs(logs)
+        if job["mode"] != "dry":
+            append_logs(logs)
         job["finished_at"] = _now_iso()
         with _LOCK:
             if _ACTIVE["id"] == job["id"]:
