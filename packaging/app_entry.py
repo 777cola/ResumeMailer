@@ -53,7 +53,6 @@ def _open_later(url: str) -> None:
 def main() -> int:
     _tidy_stdio()
     os.environ.setdefault("HOST", "127.0.0.1")
-    os.environ["RESUMEMAILER_PACKAGED"] = "1"
     requested = int(os.environ.get("RESUMEMAILER_PORT") or os.environ.get("PORT") or 8765)
 
     # 已经开着一个：把浏览器叫过来就好，别起第二个实例抢配置

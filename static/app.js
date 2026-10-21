@@ -209,13 +209,36 @@ function showParseErrors(errors, warnings) {
   if (parts.length > 40) box.innerHTML += `<p>…还有 ${parts.length - 40} 条</p>`;
 }
 
-function applyRecipients(rows) {
-  const incoming = (rows || []).map((r, i) => ({
-    seq: i + 1, company: r.company || '', email: r.email || '',
-    subject: r.subject || '', vars: r.vars || {},
-  }));
+function splitEmailCell(raw) {
+  return String(raw || '')
+    .split(/[,;，；、]+/)
+    .map(t => {
+      const m = t.match(/<([^<>]+)>/);
+      return (m ? m[1] : t).trim();
+    })
+    .filter(Boolean);
+}
+
+function applyRecipients(rows, opts) {
+  const options = opts || {};
+  // 一格多邮箱 → 拆成多行，别让两个 HR 出现在同一个 To 里
+  const incoming = [];
+  (rows || []).forEach(r => {
+    const emails = splitEmailCell(r.email);
+    (emails.length ? emails : ['']).forEach(em => {
+      incoming.push({
+        seq: incoming.length + 1, company: r.company || '', email: em,
+        subject: r.subject || '', vars: r.vars || {},
+      });
+    });
+  });
   const append = $('appendMode') && $('appendMode').checked && recipients.length > 0;
   if (!append) {
+    if (options.confirmReplace && recipients.length) {
+      const ok = confirm(`会用新导入的 ${incoming.length} 条替换当前的 ${recipients.length} 条。`
+        + '\n要保留原名单，先勾选上面的「追加到现有名单」。继续替换？');
+      if (!ok) return null;
+    }
     recipients = incoming;
     return incoming.length;
   }
@@ -232,7 +255,8 @@ function applyRecipients(rows) {
 }
 
 function applyParsed(res) {
-  const added = applyRecipients(res.recipients);
+  const added = applyRecipients(res.recipients, { confirmReplace: true });
+  if (added === null) return;
   renderRecipients();
   showParseErrors(res.errors, res.warnings);
   toast($('appendMode').checked
@@ -332,7 +356,9 @@ $('imageParseBtn').addEventListener('click', async () => {
   fd.append('hint', $('imageHint').value.trim());
   try {
     const res = await api('POST', '/api/ai/parse-images', fd);
-    applyRecipients(res.recipients);
+    if (applyRecipients(res.recipients, { confirmReplace: true }) === null) {
+      btn.disabled = false; btn.textContent = '识别截图里的收件人'; return;
+    }
     renderRecipients();
     showParseErrors([], res.recipients.length ? [] : ['图里没有识别到收件人，换一张清晰点的，或补一句说明']);
     pendingImages = [];
@@ -508,7 +534,9 @@ $('aiFillBtn').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'AI 分析中…';
   try {
     const res = await api('POST', '/api/ai/fill-template', { input });
-    applyRecipients(res.recipients);
+    if (applyRecipients(res.recipients, { confirmReplace: true }) === null) {
+      btn.disabled = false; btn.textContent = 'AI 自动填充'; return;
+    }
     renderRecipients();
     showParseErrors([], res.recipients.length ? [] : ['AI 没有提取到收件人，检查一下输入内容']);
     toast(`AI 提取了 ${recipients.length} 条`, 'success');
@@ -1139,6 +1167,7 @@ async function init() {
   }
 
   fillAiFormFromConfig();
+  if (config.version) $('appVersion').textContent = 'v' + config.version;
 
   const u = config.user || {};
   $('userName').value = u.name || '';

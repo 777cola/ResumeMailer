@@ -39,6 +39,16 @@ async def _no_stale_static(request: Request, call_next):
     return resp
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+def _app_version() -> str:
+    try:
+        return (Path(__file__).parent / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "dev"
+
+
+APP_VERSION = _app_version()
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # 公开部署时可设访问口令，避免别人读到你的配置 / 用你的实例发信
@@ -187,6 +197,7 @@ def _config_payload() -> dict:
         "email_presets": EMAIL_PRESETS,
         "today": {"sent": sent_today(), "date": date.today().isoformat()},
         "token_required": bool(ACCESS_TOKEN),
+        "version": APP_VERSION,
         "running_job": jobs.active_job_id(),
         "limits": {"max_attach_mb": MAX_ATTACH_MB},
     }
