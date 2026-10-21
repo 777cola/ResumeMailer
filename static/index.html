@@ -323,15 +323,34 @@
       </div>
     </section>
 
-    <!-- ═══ 6 日志 ═══ -->
+    <!-- ═══ 6 投递记录 ═══ -->
     <section id="tab-logs" class="tab-content">
-      <h2>📋 发送日志</h2>
+      <h2>📋 投递记录</h2>
+
       <div class="card">
         <div class="form-actions">
+          <button class="btn btn-primary" id="scanBtn">📬 检查退信与回复</button>
           <button class="btn btn-secondary" id="refreshLogsBtn">🔄 刷新</button>
           <button class="btn btn-secondary" id="exportLogsBtn">⬇️ 导出 Excel</button>
           <button class="btn btn-danger" id="clearLogsBtn">🗑 清空日志</button>
         </div>
+        <p class="tip" id="scanInfo">还没检查过收件箱。点「检查退信与回复」会读取最近 14 天的邮件（只读，不会改成已读）。</p>
+
+        <div class="send-summary" style="margin-top:14px;">
+          <div class="stat"><span class="stat-label">已投递</span><span class="stat-value" id="statSent">0</span></div>
+          <div class="stat"><span class="stat-label">已回复</span><span class="stat-value" id="statReplied">0</span></div>
+          <div class="stat"><span class="stat-label">退信</span><span class="stat-value" id="statBounced">0</span></div>
+        </div>
+
+        <div class="table-wrap"><table id="contactTable"><thead><tr>
+          <th>公司</th><th>邮箱</th><th>最近投递</th><th>状态</th><th>备注</th>
+        </tr></thead><tbody></tbody></table></div>
+        <p class="tip" style="margin-top:8px;">退信地址会在下次发送时自动跳过；想强制重试，勾选「忽略退信记录」再发。回复只按发件地址匹配，自动回复也算。</p>
+        <label class="checkbox-label" style="margin-top:6px;"><input type="checkbox" id="includeDead"> 忽略退信记录（强制重发到死地址）</label>
+      </div>
+
+      <div class="card">
+        <h3>发送日志</h3>
         <div class="table-wrap"><table id="logTable"><thead><tr>
           <th>时间</th><th>公司</th><th>邮箱</th><th>主题</th><th>方式</th><th>结果</th><th>备注</th>
         </tr></thead><tbody></tbody></table></div>

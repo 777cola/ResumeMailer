@@ -382,6 +382,167 @@ def test_empty_attachment_list_does_not_fall_back():
         raise AssertionError("沿用的附件不存在时必须报错，而不是静默发一封没有附件的信")
 
 
+DSN_RAW = b"""From: Mail Delivery Subsystem <MAILER-DAEMON@qq.com>
+To: me@qq.com
+Subject: Undelivered Mail Returned to Sender
+Date: Wed, 21 Oct 2026 10:00:00 +0800
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=delivery-status; boundary="BOUND"
+
+--BOUND
+Content-Type: text/plain; charset=utf-8
+
+\u4f60\u7684\u90ae\u4ef6\u65e0\u6cd5\u6295\u9012\u3002
+--BOUND
+Content-Type: message/delivery-status
+
+Reporting-MTA: dns; qq.com
+Final-Recipient: rfc822; HR@OldCompany.com
+Action: failed
+Status: 5.1.1
+Diagnostic-Code: smtp; 550 5.1.1 User unknown
+
+--BOUND
+Content-Type: text/rfc822-headers
+
+Subject: test
+--BOUND--
+"""
+
+
+def _parse(raw):
+    from email import policy
+    from email.parser import BytesParser
+    return BytesParser(policy=policy.default).parsebytes(raw)
+
+
+def test_parse_dsn():
+    from engine.bounce import parse_dsn, looks_like_bounce
+    msg = _parse(DSN_RAW)
+    assert looks_like_bounce(str(msg["From"]), str(msg["Subject"]))
+    rows = parse_dsn(msg)
+    assert len(rows) == 1, rows
+    assert rows[0]["email"] == "hr@oldcompany.com"
+    assert rows[0]["status"] == "5.1.1"
+    assert "550" in rows[0]["reason"]
+
+
+def test_parse_bounce_text_fallback():
+    from engine.bounce import parse_bounce_message
+    raw = """From: postmaster@163.com
+Subject: 无法投递
+Content-Type: text/plain; charset=utf-8
+
+\u60a8\u7684\u90ae\u4ef6\u65e0\u6cd5\u6295\u9012\u5230 dead@nowhere.com\uff0c\u8bf7\u68c0\u67e5\u5730\u5740\u3002
+""".encode("utf-8")
+    rows = parse_bounce_message(_parse(raw), "me@163.com")
+    assert [r["email"] for r in rows] == ["dead@nowhere.com"], rows
+
+
+def test_scan_inbox_with_fake_conn():
+    from engine.bounce import scan_inbox
+    from config import EmailConfig
+
+    headers = {
+        b"1": b"From: HR Wang <hr@good.com>\nSubject: \u9762\u8bd5\u9080\u8bf7\nDate: Wed, 21 Oct 2026 09:00:00 +0800\n\n",
+        b"2": DSN_RAW[:600],
+        b"3": b"From: Newsletter <news@spam.com>\nSubject: weekly\n\n",
+    }
+
+    class FakeConn:
+        def select(self, *a, **k):
+            return ("OK", [b"1"])
+
+        def search(self, charset, crit):
+            return ("OK", [b"1 2 3"])
+
+        def fetch(self, uid, what):
+            body = DSN_RAW if uid == b"2" else headers.get(uid, b"")
+            return ("OK", [(("x (BODY %d" % len(body)).encode(), body), b")"])
+
+        def logout(self):
+            pass
+
+    out = scan_inbox(EmailConfig(email="me@qq.com", auth_code="x"),
+                     {"hr@good.com"}, days=14, conn=FakeConn())
+    assert out["scanned"] == 3, out
+    assert [r["email"] for r in out["replies"]] == ["hr@good.com"], out["replies"]
+    assert [b["email"] for b in out["bounces"]] == ["hr@oldcompany.com"], out["bounces"]
+
+
+def test_scan_detects_reply_by_message_id():
+    """HR 换了邮箱回信，靠 In-Reply-To 也能认出来"""
+    from engine.bounce import scan_inbox
+    from config import EmailConfig
+    hdr = (b"From: HR Assistant <hr-other@corp.com>\n"
+           b"Subject: Re: \xe5\xae\x9e\xe4\xb9\xa0\xe7\x94\xb3\xe8\xaf\xb7\n"
+           b"In-Reply-To: <abc123@qq.com>\n"
+           b"Date: Wed, 21 Oct 2026 11:00:00 +0800\n\n")
+
+    class FakeConn:
+        def select(self, *a, **k): return ("OK", [b"1"])
+        def search(self, charset, crit): return ("OK", [b"9"])
+        def fetch(self, uid, what):
+            return ("OK", [(("x (BODY %d" % len(hdr)).encode(), hdr), b")"])
+        def logout(self): pass
+
+    out = scan_inbox(EmailConfig(email="me@qq.com", auth_code="x"),
+                     {"hr@target.com"}, conn=FakeConn(),
+                     msgids={"<abc123@qq.com>": "hr@target.com"})
+    assert [r["email"] for r in out["replies"]] == ["hr@target.com"], out["replies"]
+
+
+def test_delivery_store_priority():
+    import tempfile
+    import engine.delivery as d
+
+    old = d.FILE
+    d.FILE = Path(tempfile.mkdtemp()) / "delivery.json"
+    try:
+        d.apply_scan([{"email": "dead@x.com", "reason": "550", "status": "5.1.1",
+                       "date": "2026-10-20"}],
+                     [{"email": "hr@good.com", "subject": "面试邀请", "date": "2026-10-21"}])
+        assert "dead@x.com" in d.dead_emails()
+        logs = [{"success": True, "email": "hr@good.com", "company": "好公司",
+                 "time": "2026-10-19T10:00:00", "mode": "send"}]
+        view = {r["email"]: r for r in d.contacts_view(logs)}
+        assert view["hr@good.com"]["status"] == "replied"
+        assert view["dead@x.com"]["status"] == "bounced"
+        # 退信后又收到回复，不应再算作退信
+        d.apply_scan([], [{"email": "dead@x.com", "subject": "误报", "date": "2026-10-22"}])
+        assert "dead@x.com" not in d.dead_emails()
+    finally:
+        d.FILE = old
+
+
+def test_send_batch_skips_flagged_rows():
+    class FakeLink:
+        sent = []
+
+        def __init__(self, cfg):
+            pass
+
+        def send(self, msg):
+            FakeLink.sent.append(msg["To"])
+
+        def close(self):
+            pass
+
+    from config import EmailConfig
+    orig = sender._SmtpLink
+    sender._SmtpLink = FakeLink
+    try:
+        recs = [{"company": "A", "email": "a@x.com"},
+                {"company": "B", "email": "b@x.com", "skip_reason": "退信地址，已自动跳过"}]
+        out = sender.send_batch(EmailConfig(email="me@qq.com"), recs, "hi", "s", [],
+                                send_mode="send", rate=600)
+        assert [r["status"] for r in out["results"]] == ["sent", "skipped"], out["results"]
+        assert FakeLink.sent == ["a@x.com"]
+        assert "退信" in out["results"][1]["error"]
+    finally:
+        sender._SmtpLink = orig
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     failed = 0

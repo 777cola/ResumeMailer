@@ -391,6 +391,12 @@ def send_batch(
                           "error": stopped})
                 break
 
+            if r.get("skip_reason"):
+                emit({"company": r.get("company", ""), "email": r.get("email", ""),
+                      "subject": "", "success": False, "status": "skipped",
+                      "error": r["skip_reason"]})
+                continue
+
             rendered = render_email(r, user_info or {}, body, subject_template)
             to_addr = r.get("email", "")
             result = {"company": r.get("company", ""), "email": to_addr,
@@ -399,6 +405,7 @@ def send_batch(
             try:
                 msg = build_message(cfg, to_addr, rendered["subject"], rendered["body"],
                                     rendered["html"], attachments, cc_self)
+                result["message_id"] = msg.get("Message-ID", "")
                 if is_dry:
                     # 试跑：消息真的组装好了（附件可读、编码正确），但不发出去
                     result.update(success=True, status="dry")

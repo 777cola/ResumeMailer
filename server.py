@@ -20,6 +20,8 @@ from config import (EMAIL_PRESETS, load_config, save_config, EmailConfig, ATTACH
 from engine.excel_parser import generate_template, parse_workbook, parse_tsv
 from engine.ai_filler import ai_chat, ai_fill_template, ai_generate_body, get_available_providers
 from engine.sender import test_connection, send_test
+from engine.bounce import scan_inbox
+from engine import delivery
 from engine.render import (render_email, unknown_placeholders, collect_vars,
                            build_context)
 from engine import jobs
@@ -355,6 +357,15 @@ def preview(data: dict):
             if name in ctx and not str(ctx[name]).strip():
                 empty.add(name)
 
+    dead = delivery.dead_emails()
+    dead_hits, seen_dead = [], set()
+    for r in recipients:
+        addr = str(r.get("email", "")).lower()
+        if addr in dead and addr not in seen_dead:
+            seen_dead.add(addr)
+            dead_hits.append({"email": addr, "company": r.get("company", ""),
+                              "reason": dead[addr]})
+
     contacted = already_contacted()
     dup_in_batch, contacted_hits, seen = [], [], set()
     for r in recipients:
@@ -375,6 +386,8 @@ def preview(data: dict):
         "duplicates_in_batch": dup_in_batch,
         "already_contacted": contacted_hits[:50],
         "already_contacted_count": len(contacted_hits),
+        "dead_addresses": dead_hits[:50],
+        "dead_address_count": len(dead_hits),
         "variables": collect_vars(recipients),
         "today": {"sent": sent_today(), "limit": cfg.daily_limit},
         "attachments": [Path(p).name for p in (cfg.last_attachments or [])],
@@ -566,7 +579,20 @@ def send_start(data: dict):
     daily_limit = int(data.get("daily_limit", cfg.daily_limit) or 0)
     cc_self = bool(data.get("cc_self", cfg.cc_self))
 
-    cfg.last_recipients = recipients
+    # 之前退信过的地址默认跳过（可在请求里传 include_dead=true 强制重试）
+    include_dead = bool(data.get("include_dead"))
+    dead = {} if include_dead else delivery.dead_emails()
+    job_recipients, dead_skipped = [], 0
+    for r in recipients:
+        item = dict(r)
+        addr = str(item.get("email", "")).lower()
+        if addr in dead:
+            reason = dead[addr][:60] if dead[addr] else "此前投递被退回"
+            item["skip_reason"] = f"退信地址，已自动跳过（{reason}）"
+            dead_skipped += 1
+        job_recipients.append(item)
+
+    cfg.last_recipients = recipients      # 原样保存，不把 skip_reason 写进配置
     cfg.last_attachments = attachments
     cfg.body_template = body
     cfg.subject_template = subject
@@ -576,12 +602,13 @@ def send_start(data: dict):
             "年级": cfg.user.grade, "电话": cfg.user.phone, "邮箱": cfg.user.email}
     try:
         job_id = jobs.start_job(
-            cfg_email=cfg.email, recipients=recipients, body=body,
+            cfg_email=cfg.email, recipients=job_recipients, body=body,
             subject_template=subject, attachments=attachments, mode=mode,
             rate=rate, user_info=user, daily_limit=daily_limit, cc_self=cc_self)
     except RuntimeError as e:
         raise HTTPException(409, str(e))
     return {"ok": True, "job_id": job_id, "total": len(recipients),
+            "dead_skipped": dead_skipped,
             "skipped_by_limit": max(0, len(recipients) - max(0, daily_limit - sent_today())) if daily_limit else 0}
 
 
@@ -612,6 +639,40 @@ def clear_logs():
     if LOG_FILE.exists():
         LOG_FILE.unlink()
     return {"ok": True}
+
+
+@app.get("/api/contacts")
+def contacts():
+    view = delivery.contacts_view(load_log())
+    counts = {"sent": 0, "replied": 0, "bounced": 0}
+    for row in view:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    return {"contacts": view[:500], "counts": counts, "last_scan": delivery.last_scan()}
+
+
+@app.post("/api/inbox/scan")
+def inbox_scan(data: dict = None):
+    """扫收件箱：Mailer-Daemon 退信 + 对方回信。只读，不改已读状态。"""
+    cfg = load_config()
+    if not (cfg.email.email and cfg.email.auth_code and cfg.email.imap_host):
+        raise HTTPException(400, "需要先配置邮箱，并开启 IMAP（QQ/163 都要在设置里手动开）")
+    days = max(1, min(90, int((data or {}).get("days", 14) or 14)))
+    contacted = set(already_contacted().keys())
+    msgids = {}
+    for e in load_log():
+        mid = str(e.get("message_id", "") or "").strip()
+        if mid and e.get("success"):
+            msgids[mid] = str(e.get("email", ""))
+            msgids[mid.strip("<>")] = str(e.get("email", ""))
+    try:
+        out = scan_inbox(cfg.email, contacted, days=days, max_msgs=300, msgids=msgids)
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"ok": False, "error": f"扫描失败：{e}"})
+    if not out["scanned"] and out["errors"]:
+        return JSONResponse(status_code=400, content={"ok": False, "error": out["errors"][0]})
+    stats = delivery.apply_scan(out["bounces"], out["replies"])
+    return {"ok": True, "scanned": out["scanned"], "bounces": out["bounces"],
+            "replies": out["replies"], "errors": out["errors"][:5], **stats}
 
 
 @app.get("/api/report/export")

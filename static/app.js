@@ -69,7 +69,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.add('active');
     $('tab-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'send') loadPreview();
-    if (tab.dataset.tab === 'logs') loadLogs();
+    if (tab.dataset.tab === 'logs') { loadLogs(); loadContacts(); }
     if (tab.dataset.tab === 'guide') loadGuide();
   });
 });
@@ -506,6 +506,10 @@ function renderPreflight(p) {
   if (p.today.limit && p.total > remaining) {
     items.push(['error', `今日还可发 ${remaining} 封，本批 ${p.total} 封，超出部分会被跳过。`]);
   }
+  if (p.dead_address_count) {
+    const names = p.dead_addresses.slice(0, 3).map(x => x.company || x.email).join('、');
+    items.push(['warn', `${p.dead_address_count} 个地址之前退信过（${names}${p.dead_address_count > 3 ? '…' : ''}），发送时会自动跳过。要强制重试，去「投递记录」勾选「忽略退信记录」。`]);
+  }
   const contactedCount = p.already_contacted_count || p.already_contacted.length;
   if (contactedCount) {
     const names = p.already_contacted.slice(0, 5).map(x => `${x.company || x.email}`).join('、');
@@ -637,8 +641,10 @@ async function startSending(mode) {
       rate: parseInt($('rateInput').value) || 20,
       daily_limit: parseInt($('dailyLimitInput').value) || 0,
       cc_self: $('ccSelf').checked,
+      include_dead: !!($('includeDead') && $('includeDead').checked),
     });
     currentJob = res.job_id;
+    if (res.dead_skipped) toast(`已自动跳过 ${res.dead_skipped} 个退信地址`, 'info', 6000);
     $('cancelBtn').style.display = 'inline-block';
     $('progressText').textContent = `0 / ${res.total}`;
     pollJob();
@@ -753,6 +759,54 @@ $('clearLogsBtn').addEventListener('click', async () => {
   await api('DELETE', '/api/logs');
   loadLogs();
   toast('日志已清空', 'success');
+});
+
+// ── 投递记录 / 收件箱扫描 ──
+function fmtTime(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? String(s) : d.toLocaleString('zh-CN', { hour12: false });
+}
+
+async function loadContacts() {
+  let data;
+  try { data = await api('GET', '/api/contacts'); } catch (e) { return; }
+  $('statSent').textContent = data.counts.sent || 0;
+  $('statReplied').textContent = data.counts.replied || 0;
+  $('statBounced').textContent = data.counts.bounced || 0;
+
+  const tbody = $('contactTable').querySelector('tbody');
+  const rows = (data.contacts || []).map(c => {
+    const label = c.status === 'replied' ? '✅ 已回复'
+      : c.status === 'bounced' ? '⛔ 退信' : '📨 已投递';
+    const color = c.status === 'bounced' ? '#b3261e'
+      : c.status === 'replied' ? '#2e7d32' : '#888';
+    return `<tr><td>${esc(c.company || '—')}</td><td>${esc(c.email)}</td>
+      <td>${esc(fmtTime(c.sent_at))}</td><td>${label}</td>
+      <td style="color:${color}">${esc(c.detail || '—')}</td></tr>`;
+  }).join('');
+  tbody.innerHTML = rows || '<tr><td colspan="5" class="tip">还没有投递记录</td></tr>';
+
+  $('scanInfo').textContent = data.last_scan
+    ? `上次检查：${fmtTime(data.last_scan)}（只读最近 14 天邮件，不会改成已读）`
+    : '还没检查过收件箱。点「检查退信与回复」会读取最近 14 天的邮件（只读，不会改成已读）。';
+}
+
+$('scanBtn').addEventListener('click', async () => {
+  const btn = $('scanBtn');
+  btn.disabled = true; btn.textContent = '扫描中…（大邮箱要十几秒）';
+  try {
+    const res = await api('POST', '/api/inbox/scan', { days: 14 });
+    await loadContacts();
+    const bits = [`扫描 ${res.scanned} 封`];
+    if (res.new_bounced) bits.push(`新增退信 ${res.new_bounced}`);
+    if (res.new_replied) bits.push(`新增回复 ${res.new_replied}`);
+    if (!res.new_bounced && !res.new_replied) bits.push('没有新的退信或回复');
+    toast(bits.join('，'), res.new_bounced || res.new_replied ? 'success' : 'info', 6000);
+  } catch (e) {
+    toast(e.message, 'error', 8000);
+  }
+  btn.disabled = false; btn.textContent = '📬 检查退信与回复';
 });
 
 // ── 上手引导 ──
