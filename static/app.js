@@ -89,26 +89,33 @@ document.querySelectorAll('.sub-tabs').forEach(group => {
 // ── 邮箱配置 ──
 let PRESETS = {};
 
+function applyEmailPreset(name) {
+  const p = PRESETS[name];
+  if (!p) { $('presetHint').textContent = ''; return; }
+  $('smtpHost').value = p.smtp_host;
+  $('smtpPort').value = p.smtp_port;
+  $('imapHost').value = p.imap_host;
+  $('imapPort').value = p.imap_port;
+  $('useSsl').value = p.use_ssl ? 'true' : 'false';
+  $('presetHint').textContent = p.daily_hint
+    ? `该邮箱每日发信量参考上限约 ${p.daily_hint} 封，超过会被服务商拦截。`
+    : '';
+  if (!$('dailyLimitInput').value || $('dailyLimitInput').value === '0') {
+    $('dailyLimitInput').value = p.daily_hint || 0;
+  }
+}
+
 function initEmailPresets() {
   const sel = $('emailPreset');
   const names = Object.keys(PRESETS);
-  sel.innerHTML = '<option value="">— 手动填写 —</option>' +
-    names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  sel.addEventListener('change', () => {
-    const p = PRESETS[sel.value];
-    if (!p) { $('presetHint').textContent = ''; return; }
-    $('smtpHost').value = p.smtp_host;
-    $('smtpPort').value = p.smtp_port;
-    $('imapHost').value = p.imap_host;
-    $('imapPort').value = p.imap_port;
-    $('useSsl').value = p.use_ssl ? 'true' : 'false';
-    $('presetHint').textContent = p.daily_hint
-      ? `该邮箱每日发信量参考上限约 ${p.daily_hint} 封，超过会被服务商拦截。`
-      : '';
-    if (!$('dailyLimitInput').value || $('dailyLimitInput').value === '0') {
-      $('dailyLimitInput').value = p.daily_hint || 0;
-    }
-  });
+  // QQ 邮箱在国内求职场景最常用，放第一个；没有已保存配置时直接就选它
+  sel.innerHTML = names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')
+    + '<option value="">手动填写</option>';
+  sel.addEventListener('change', () => applyEmailPreset(sel.value));
+
+  const saved = config.email && config.email.email;
+  const pick = names.includes('QQ邮箱') ? 'QQ邮箱' : names[0];
+  if (!saved) { sel.value = pick; applyEmailPreset(pick); }
 }
 
 function gatherEmailConfig() {
@@ -196,20 +203,41 @@ function saveRecipients() {
 function showParseErrors(errors, warnings) {
   const box = $('parseErrors');
   const parts = [];
-  (warnings || []).forEach(w => parts.push(`<p class="warn-line">⚠️ ${esc(w)}</p>`));
-  (errors || []).forEach(e => parts.push(`<p>✕ ${esc(e)}</p>`));
+  (warnings || []).forEach(w =>parts.push(`<p class="warn-line">${esc(w)}</p>`));
+  (errors || []).forEach(e =>parts.push(`<p>${esc(e)}</p>`));
   box.innerHTML = parts.slice(0, 40).join('');
   if (parts.length > 40) box.innerHTML += `<p>…还有 ${parts.length - 40} 条</p>`;
 }
 
-function applyParsed(res) {
-  recipients = (res.recipients || []).map(r => ({
-    seq: r.seq, company: r.company || '', email: r.email || '',
+function applyRecipients(rows) {
+  const incoming = (rows || []).map((r, i) => ({
+    seq: i + 1, company: r.company || '', email: r.email || '',
     subject: r.subject || '', vars: r.vars || {},
   }));
+  const append = $('appendMode') && $('appendMode').checked && recipients.length > 0;
+  if (!append) {
+    recipients = incoming;
+    return incoming.length;
+  }
+  const seen = new Set(recipients.map(r => (r.email || '').toLowerCase()).filter(Boolean));
+  let added = 0;
+  for (const r of incoming) {
+    const key = (r.email || '').toLowerCase();
+    if (key && seen.has(key)) continue;
+    seen.add(key);
+    recipients.push(Object.assign({}, r, { seq: recipients.length + 1 }));
+    added += 1;
+  }
+  return added;
+}
+
+function applyParsed(res) {
+  const added = applyRecipients(res.recipients);
   renderRecipients();
   showParseErrors(res.errors, res.warnings);
-  toast(`已加载 ${recipients.length} 位收件人`, 'success');
+  toast($('appendMode').checked
+    ? `新增 ${added} 条，当前共 ${recipients.length} 条`
+    : `已加载 ${recipients.length} 位收件人`, 'success');
 }
 
 const excelZone = $('excelUploadZone');
@@ -304,10 +332,7 @@ $('imageParseBtn').addEventListener('click', async () => {
   fd.append('hint', $('imageHint').value.trim());
   try {
     const res = await api('POST', '/api/ai/parse-images', fd);
-    recipients = (res.recipients || []).map((r, i) => ({
-      seq: i + 1, company: r.company || '', email: r.email || '',
-      subject: r.subject || '', vars: r.vars || {},
-    }));
+    applyRecipients(res.recipients);
     renderRecipients();
     showParseErrors([], res.recipients.length ? [] : ['图里没有识别到收件人，换一张清晰点的，或补一句说明']);
     pendingImages = [];
@@ -317,7 +342,7 @@ $('imageParseBtn').addEventListener('click', async () => {
   } catch (e) {
     toast(e.message, 'error', 9000);
   }
-  btn.disabled = false; btn.textContent = '🤖 识别截图里的收件人';
+  btn.disabled = false; btn.textContent = '识别截图里的收件人';
 });
 
 // ── AI 设置 ──
@@ -339,7 +364,7 @@ function renderAiStatus() {
   const el = $('aiStatus');
   if (el) {
     el.innerHTML = aiConfigured()
-      ? `✅ ${line}${a.api_key ? ' · Key 已保存' : ''}`
+      ? ` ${line}${a.api_key ? ' · Key 已保存' : ''}`
       : '未配置。选一个提供商、粘贴 Key，点「测试连接」确认可用。';
   }
   document.querySelectorAll('[data-goto-ai]').forEach(link => {
@@ -353,7 +378,7 @@ function renderProviderCards() {
   box.innerHTML = (config.ai_providers || []).map(p => {
     const active = p.name === aiState.provider ? 'active' : '';
     const vision = (p.vision && p.vision.length)
-      ? '<span class="pv-tag">👁 看图</span>' : '';
+      ? '<span class="pv-tag">支持看图</span>' : '';
     return `<div class="provider-card ${active}" data-provider="${esc(p.name)}">
       <div class="pv-name">${esc(p.name)}</div>${vision}</div>`;
   }).join('');
@@ -369,10 +394,16 @@ function selectProvider(name) {
   const isCustom = name.indexOf('自定义') === 0;
   const sel = $('aiModelSelect');
   const custom = $('aiModelCustom');
-  sel.innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+  sel.innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('')
+    + '<option value="__custom__">其它模型（手动输入）</option>';
   const manual = isCustom || !models.length;
   sel.style.display = manual ? 'none' : 'block';
   custom.style.display = manual ? 'block' : 'none';
+  sel.onchange = () => {
+    const picked = sel.value === '__custom__';
+    custom.style.display = picked ? 'block' : 'none';
+    if (picked) custom.focus();
+  };
   $('aiBaseUrlGroup').style.display = isCustom ? 'block' : 'none';
 
   const link = $('aiDocsLink');
@@ -380,17 +411,18 @@ function selectProvider(name) {
   else { link.style.display = 'none'; }
 
   $('aiVisionHint').textContent = (preset.vision && preset.vision.length)
-    ? `👁 图片识别用：${preset.vision.join(' / ')}` : '';
+    ? `图片识别用：${preset.vision.join(' / ')}` : '';
   $('aiTestResult').style.display = 'none';
   renderProviderCards();
 }
 
 function currentAiForm() {
   const provider = aiState.provider;
-  const manual = $('aiModelSelect').style.display === 'none';
+  const sel = $('aiModelSelect');
+  const manual = sel.style.display === 'none' || sel.value === '__custom__';
   return {
     provider,
-    model: manual ? $('aiModelCustom').value.trim() : $('aiModelSelect').value,
+    model: manual ? $('aiModelCustom').value.trim() : sel.value,
     api_key: $('aiKeyInput').value.trim(),
     base_url: provider.indexOf('自定义') === 0 ? $('aiBaseUrlInput').value.trim() : '',
   };
@@ -402,8 +434,9 @@ function fillAiFormFromConfig() {
   if (a.provider) {
     selectProvider(a.provider);
   } else {
-    aiState.provider = "";
-    renderProviderCards();
+    const first = (config.ai_providers || [])[0];
+    if (first) selectProvider(first.name);
+    else { aiState.provider = ""; renderProviderCards(); }
   }
   if (a.model) {
     const sel = $('aiModelSelect');
@@ -460,7 +493,7 @@ $('testAiBtn').addEventListener('click', async () => {
     box.className = 'test-result error';
     box.textContent = e.message;
   }
-  btn.disabled = false; btn.textContent = '🔌 测试连接';
+  btn.disabled = false; btn.textContent = '测试连接';
 });
 
 $('aiFillBtn').addEventListener('click', async () => {
@@ -475,15 +508,12 @@ $('aiFillBtn').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'AI 分析中…';
   try {
     const res = await api('POST', '/api/ai/fill-template', { input });
-    recipients = (res.recipients || []).map((r, i) => ({
-      seq: i + 1, company: r.company, email: r.email,
-      subject: r.subject || '', vars: r.vars || {},
-    }));
+    applyRecipients(res.recipients);
     renderRecipients();
     showParseErrors([], res.recipients.length ? [] : ['AI 没有提取到收件人，检查一下输入内容']);
     toast(`AI 提取了 ${recipients.length} 条`, 'success');
   } catch (e) { toast(e.message, 'error', 6000); }
-  btn.disabled = false; btn.textContent = '🤖 AI 自动填充';
+  btn.disabled = false; btn.textContent = 'AI 自动填充';
 });
 
 // ── 正文 ──
@@ -568,7 +598,7 @@ async function sendBodyChat() {
     const useBtn = document.createElement('button');
     useBtn.className = 'btn btn-warning btn-xs';
     useBtn.style.margin = '4px 0 10px';
-    useBtn.textContent = '📋 使用此正文';
+    useBtn.textContent = '使用此正文';
     useBtn.addEventListener('click', () => {
       $('bodyEditor').value = res.content;
       toast('已填入编辑框，记得点「保存正文与主题」', 'success');
@@ -631,10 +661,10 @@ function renderAttachments() {
     <div class="file-item">
       <label class="file-check">
         <input type="checkbox" data-att="${i}" ${f.on ? 'checked' : ''}>
-        <span class="file-name">📎 ${esc(f.name)}</span>
+        <span class="file-name">${esc(f.name)}</span>
         <span class="tip">${fmtSize(f.size)}</span>
       </label>
-      <span class="file-del" data-delatt="${i}">🗑 删除</span>
+      <span class="file-del" data-delatt="${i}">删除</span>
     </div>`).join('');
   list.querySelectorAll('[data-att]').forEach(cb => {
     cb.addEventListener('change', () => {
@@ -740,15 +770,15 @@ function renderPreflight(p) {
          跳过已投递过的邮箱（${contactedCount} 个）
        </label>`
     : '<input type="checkbox" id="skipSent" hidden>';
-  box.innerHTML = items.map(([k, t]) => `<div class="pre-line ${klass[k]}">${k === 'info' ? 'ℹ️' : k === 'warn' ? '⚠️' : '⛔'} ${esc(t)}</div>`).join('') + skipBox;
+  box.innerHTML = items.map(([k, t]) => `<div class="pre-line ${klass[k]}">${esc(t)}</div>`).join('') + skipBox;
 }
 
 function renderPreviewCards(p) {
   const cards = p.items.map(it => `
     <div class="preview-card${it.error ? ' preview-bad' : ''}">
-      <div class="preview-subject">📧 ${esc(it.subject || '(无主题)')}</div>
-      <div class="preview-to">📩 ${esc(it.company || '—')} &lt;${esc(it.email)}&gt;</div>
-      ${it.error ? `<div class="preview-error">⚠️ 这行不会发出去：${esc(it.error)}</div>` : ''}
+      <div class="preview-subject">${esc(it.subject || '(无主题)')}</div>
+      <div class="preview-to">${esc(it.company || '—')} &lt;${esc(it.email)}&gt;</div>
+      ${it.error ? `<div class="preview-error">这行不会发出去：${esc(it.error)}</div>` : ''}
       <div class="preview-body">${esc(it.body)}</div>
     </div>`).join('');
   $('sendPreview').innerHTML = cards +
@@ -781,7 +811,7 @@ $('testBtn').addEventListener('click', async () => {
     });
     toast(res.msg, 'success', 6000);
   } catch (e) { toast(e.message, 'error', 8000); }
-  btn.disabled = false; btn.textContent = '✉️ 先发给自己';
+  btn.disabled = false; btn.textContent = '先发给自己';
 });
 
 // ── 发送 ──
@@ -870,9 +900,11 @@ async function pollJob() {
   $('progressFill').style.width = pct + '%';
   $('progressText').textContent = `${st.done} / ${st.total}（成功 ${st.success}，失败 ${st.failed}）`;
   $('progressLog').innerHTML = st.results.slice(-12).map(r => {
-    const icon = r.status === 'sent' ? '✅' : r.status === 'draft' ? '📥'
-      : r.status === 'dry' ? '🧪' : r.status === 'skipped' ? '⏭' : '❌';
-    return `<p class="${r.success ? 'success' : 'error'}">${icon} ${esc(r.company || r.email)}${r.error ? ' — ' + esc(r.error) : ''}</p>`;
+    const label = r.status === 'sent' ? '已发送' : r.status === 'draft' ? '存草稿'
+      : r.status === 'dry' ? '试跑' : r.status === 'skipped' ? '跳过' : '失败';
+    return `<p class="${r.success ? 'success' : 'error'}"><span class="status-dot ${esc(r.status)}"></span>`
+      + `<span class="log-label">${label}</span> ${esc(r.company || r.email)}`
+      + `${r.error ? ' — ' + esc(r.error) : ''}</p>`;
   }).join('');
   $('progressLog').scrollTop = $('progressLog').scrollHeight;
 
@@ -914,10 +946,10 @@ function renderResults(st) {
   const summary = $('resultSummary');
   const totalDone = st.success + st.failed + st.skipped;
   if (st.mode === 'dry') {
-    summary.textContent = `🧪 试跑完成：${st.success} 封已完整组装（正文、主题、附件），但没有真的发出`;
+    summary.textContent = `试跑完成：${st.success} 封已完整组装（正文、主题、附件），但没有真的发出`;
     summary.style.background = '#eef3fa'; summary.style.color = '#1A4B8C';
   } else if (st.failed === 0 && st.skipped === 0) {
-    summary.textContent = `✅ 全部成功：${st.success} 封${st.mode === 'send' ? '已发送' : '已存入草稿箱'}`;
+    summary.textContent = `全部成功：${st.success} 封${st.mode === 'send' ? '已发送' : '已存入草稿箱'}`;
     summary.style.background = '#e8f5e9'; summary.style.color = '#2e7d32';
   } else {
     summary.textContent = `成功 ${st.success} · 失败 ${st.failed} · 跳过 ${st.skipped}（共 ${totalDone}）${st.stopped ? ' — ' + st.stopped : ''}`;
@@ -929,8 +961,8 @@ function renderResults(st) {
   }
   const tbody = $('resultTable').querySelector('tbody');
   tbody.innerHTML = (st.results || []).map(r => {
-    const icon = r.status === 'sent' ? '✅ 已发送' : r.status === 'draft' ? '📥 存草稿'
-      : r.status === 'dry' ? '🧪 试跑' : r.status === 'skipped' ? '⏭ 跳过' : '❌ 失败';
+    const icon = r.status === 'sent' ? '已发送' : r.status === 'draft' ? '存草稿'
+      : r.status === 'dry' ? '试跑' : r.status === 'skipped' ? '跳过' : '失败';
     return `<tr><td>${esc(r.company)}</td><td>${esc(r.email)}</td><td>${esc(r.subject)}</td>
       <td>${icon}</td><td style="color:${r.success ? '#888' : '#b3261e'}">${esc(r.error || '-')}</td></tr>`;
   }).join('');
@@ -949,7 +981,7 @@ async function loadLogs() {
       return `<tr><td>${esc(time)}</td><td>${esc(log.company)}</td><td>${esc(log.email)}</td>
         <td>${esc(log.subject || '')}</td>
         <td>${log.mode === 'send' ? '发送' : '存草稿'}</td>
-        <td>${log.success ? '✅' : '❌'}</td>
+        <td style="color:${log.success ? '#2e7d32' : '#b3261e'}">${log.success ? '成功' : '失败'}</td>
         <td style="color:${log.success ? '#888' : '#b3261e'}">${esc(log.error || '-')}</td></tr>`;
     }).join('');
   } catch (e) { toast(e.message, 'error'); }
@@ -979,12 +1011,13 @@ async function loadContacts() {
 
   const tbody = $('contactTable').querySelector('tbody');
   const rows = (data.contacts || []).map(c => {
-    const label = c.status === 'replied' ? '✅ 已回复'
-      : c.status === 'bounced' ? '⛔ 退信' : '📨 已投递';
+    const label = c.status === 'replied' ? '已回复'
+      : c.status === 'bounced' ? '退信' : '已投递';
     const color = c.status === 'bounced' ? '#b3261e'
-      : c.status === 'replied' ? '#2e7d32' : '#888';
+      : c.status === 'replied' ? '#2e7d32' : '#5a6b80';
     return `<tr><td>${esc(c.company || '—')}</td><td>${esc(c.email)}</td>
-      <td>${esc(fmtTime(c.sent_at))}</td><td>${label}</td>
+      <td>${esc(fmtTime(c.sent_at))}</td>
+      <td><span class="status-dot ${esc(c.status || 'sent')}"></span>${label}</td>
       <td style="color:${color}">${esc(c.detail || '—')}</td></tr>`;
   }).join('');
   tbody.innerHTML = rows || '<tr><td colspan="5" class="tip">还没有投递记录</td></tr>';
@@ -1008,7 +1041,7 @@ $('scanBtn').addEventListener('click', async () => {
   } catch (e) {
     toast(e.message, 'error', 8000);
   }
-  btn.disabled = false; btn.textContent = '📬 检查退信与回复';
+  btn.disabled = false; btn.textContent = '检查退信与回复';
 });
 
 // ── 上手引导 ──
@@ -1023,7 +1056,9 @@ async function loadGuide() {
   const box = $('guideChecklist');
   box.innerHTML = data.steps.map((s, i) => `
     <div class="guide-step ${s.done ? 'done' : ''}">
-      <span class="gs-num">${s.done ? '✓' : i + 1}</span>
+      <span class="gs-num">${s.done
+        ? '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2 6.2l2.6 2.6L10 3.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        : i + 1}</span>
       <div class="gs-body">
         <div class="gs-title">${esc(s.title)}${s.done ? ' <span class="gs-badge">完成</span>' : ''}</div>
         <div class="gs-hint">${esc(s.hint)}${s.detail ? ' · ' + esc(s.detail) : ''}</div>
@@ -1046,10 +1081,7 @@ $('demoBtn').addEventListener('click', async () => {
   try {
     const res = await api('POST', '/api/demo/load', {});
     config = await api('GET', '/api/config');
-    recipients = (res.recipients || []).map(r => ({
-      seq: r.seq, company: r.company || '', email: r.email || '',
-      subject: r.subject || '', vars: r.vars || {},
-    }));
+    applyRecipients(res.recipients);
     renderRecipients();
     updateVarHint();
     $('bodyEditor').value = config.body_template || '';
@@ -1095,12 +1127,16 @@ async function init() {
   $('useSsl').value = e.use_ssl ? 'true' : 'false';
   $('authCode').placeholder = e.auth_code ? '已保存（留空则沿用）' : '16 位授权码';
   $('presetHint').textContent = '';
-  Object.entries(PRESETS).forEach(([name, p]) => {
-    if (p.smtp_host === e.smtp_host) {
-      $('emailPreset').value = name;
-      if (p.daily_hint) $('presetHint').textContent = `该邮箱每日发信量参考上限约 ${p.daily_hint} 封。`;
+  if (e.email) {
+    // 只有配过邮箱才反查服务商；否则保留默认的 QQ
+    for (const [name, p] of Object.entries(PRESETS)) {
+      if (p.smtp_host === e.smtp_host) {
+        $('emailPreset').value = name;
+        if (p.daily_hint) $('presetHint').textContent = `该邮箱每日发信量参考上限约 ${p.daily_hint} 封。`;
+        break;
+      }
     }
-  });
+  }
 
   fillAiFormFromConfig();
 

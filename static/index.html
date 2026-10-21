@@ -14,28 +14,28 @@
       <span class="subtitle">简历投递助手</span>
     </div>
     <nav class="tabs" id="tabNav">
-      <button class="tab" data-tab="guide">📖 上手</button>
-      <button class="tab active" data-tab="config">📧 邮箱配置</button>
-      <button class="tab" data-tab="recipients">👥 收件人</button>
-      <button class="tab" data-tab="body">✍️ 正文</button>
-      <button class="tab" data-tab="attachments">📎 附件</button>
-      <button class="tab" data-tab="ai">🤖 AI 设置</button>
-      <button class="tab" data-tab="send">🚀 发送</button>
-      <button class="tab" data-tab="logs">📋 日志</button>
+      <button class="tab" data-tab="guide">上手</button>
+      <button class="tab active" data-tab="config">邮箱配置</button>
+      <button class="tab" data-tab="recipients">收件人</button>
+      <button class="tab" data-tab="body">正文</button>
+      <button class="tab" data-tab="attachments">附件</button>
+      <button class="tab" data-tab="ai">AI 设置</button>
+      <button class="tab" data-tab="send">发送</button>
+      <button class="tab" data-tab="logs">日志</button>
     </nav>
   </header>
 
   <main class="main">
     <!-- ═══ 0 上手引导 ═══ -->
     <section id="tab-guide" class="tab-content">
-      <h2>📖 三分钟上手</h2>
+      <h2>三分钟上手</h2>
       <p class="desc"><strong>你只需要准备三样：收件人名单、一份简历、一段正文</strong>——表格、截图、聊天记录都可以，
         剩下的逐封填写、加附件、按节奏发送，交给它做完。</p>
       <div class="card">
         <div id="guideChecklist" class="guide-steps"><p class="tip">加载中…</p></div>
         <div class="form-actions" style="margin-top:16px;">
-          <button class="btn btn-secondary" id="demoBtn">🎲 载入示例数据</button>
-          <button class="btn btn-primary" id="dryBtn">▶️ 试跑一遍（不发信）</button>
+          <button class="btn btn-secondary" id="demoBtn">载入示例数据</button>
+          <button class="btn btn-primary" id="dryBtn">试跑一遍（不发信）</button>
         </div>
         <p class="tip" id="guideTip" style="margin-top:8px;">示例用的是 example.com 保留域名，不会发给任何真人。</p>
       </div>
@@ -59,7 +59,7 @@
 
     <!-- ═══ 1 邮箱配置 ═══ -->
     <section id="tab-config" class="tab-content active">
-      <h2>📧 邮箱配置</h2>
+      <h2>邮箱配置</h2>
       <p class="desc">配置发件邮箱。所有信息只存在本机 <code>~/.resumemailer/</code>，不会上传。</p>
       <div class="card">
         <div class="form-group">
@@ -74,7 +74,7 @@
           </div>
           <div class="form-group flex-1">
             <label>发件人名称 <span class="tip">会显示在收件人邮箱里</span></label>
-            <input type="text" id="senderName" placeholder="如：戚俊皓">
+            <input type="text" id="senderName" placeholder="如：AutumnPants">
           </div>
         </div>
         <div class="form-row">
@@ -110,31 +110,34 @@
           <div id="testResult" class="test-result"></div>
         </div>
         <div class="form-actions">
-          <button class="btn btn-primary" id="saveEmailBtn">💾 保存邮箱配置</button>
+          <button class="btn btn-primary" id="saveEmailBtn">保存邮箱配置</button>
         </div>
       </div>
     </section>
 
     <!-- ═══ 2 收件人 ═══ -->
     <section id="tab-recipients" class="tab-content">
-      <h2>👥 收件人列表</h2>
+      <h2>收件人列表</h2>
       <div class="card">
         <p class="tip" id="aiStatusRecipients" style="margin-bottom:10px;"></p>
 
+        <label class="checkbox-label" style="margin-bottom:10px;"><input type="checkbox" id="appendMode">
+          新导入追加到现有名单（按邮箱去重），不再整批替换</label>
+
         <div class="sub-tabs">
-          <button class="sub-tab active" data-method="excel">📄 上传表格</button>
-          <button class="sub-tab" data-method="images">🖼 截图 / 图片</button>
-          <button class="sub-tab" data-method="paste">📋 粘贴文字</button>
-          <button class="sub-tab" data-method="ai">🤖 粘贴 AI 提取</button>
+          <button class="sub-tab active" data-method="excel">上传表格</button>
+          <button class="sub-tab" data-method="images">截图 / 图片</button>
+          <button class="sub-tab" data-method="paste">粘贴文字</button>
+          <button class="sub-tab" data-method="ai">粘贴 AI 提取</button>
         </div>
 
         <div id="method-excel" class="method-panel active">
           <p class="desc">
             支持 .xlsx / .csv。表格里除了「公司名称、收件人邮箱、邮件主题」，多加的列（如「岗位」）会自动变成变量
-            <a href="/api/template/download" class="link-btn" download>⬇️ 下载模板</a>
+            <a href="/api/template/download" class="link-btn" download>下载模板</a>
           </p>
           <div class="upload-zone" id="excelUploadZone">
-            <p>📂 点击或拖拽 Excel / CSV 到此处</p>
+            <p>点击或拖拽 Excel / CSV 到此处</p>
             <input type="file" accept=".xlsx,.xlsm,.csv,.txt" id="excelFileInput" hidden>
           </div>
         </div>
@@ -150,23 +153,24 @@
         <div id="method-images" class="method-panel">
           <p class="desc">招聘群聊天记录、岗位截图、表格照片都行。拖进来或用 ⌘V 直接粘贴截图；需要模型会看图（GPT-4o / Claude / qwen-vl-max / glm-4v-plus）。</p>
           <div class="upload-zone" id="imageUploadZone">
-            <p>🖼 点击、拖拽或粘贴截图（最多 6 张）</p>
+            <p>点击、拖拽或粘贴截图（最多 6 张）</p>
             <input type="file" accept="image/*" multiple id="imageInput" hidden>
           </div>
           <div id="imagePreview" class="image-grid"></div>
           <textarea id="imageHint" rows="2" placeholder="补充说明（可选）：如「只要邮箱，忽略宣讲会时间」「岗位按公司对应」"></textarea>
-          <button class="btn btn-primary" id="imageParseBtn">🤖 识别截图里的收件人</button>
+          <button class="btn btn-primary" id="imageParseBtn">识别截图里的收件人</button>
         </div>
 
         <div id="method-ai" class="method-panel">
           <p class="desc">把招聘信息/聊天记录粘进来，AI 提取公司、邮箱、岗位。邮箱不对的会标出来。</p>
           <textarea id="aiInput" rows="6" placeholder="示例：&#10;华泰资产 - 资产配置实习生 - hr@htasset.com&#10;中信证券 - 研究部实习生 - hr@citics.com"></textarea>
-          <button class="btn btn-primary" id="aiFillBtn">🤖 AI 自动填充</button>
+          <button class="btn btn-primary" id="aiFillBtn">AI 自动填充</button>
           <div id="aiFillResult"></div>
         </div>
 
         <div id="recipientTableWrapper" style="display:none;margin-top:16px;">
-          <h3>📋 收件人列表 <span id="recipientCount" class="badge"></span>
+          <h3 style="display:flex;align-items:center;gap:8px;">收件人列表
+            <span id="recipientCount" class="badge"></span>
             <span class="tip" id="recipientVars"></span></h3>
           <div class="table-wrap">
             <table id="recipientTable"><thead><tr>
@@ -181,10 +185,10 @@
 
     <!-- ═══ 3 正文 ═══ -->
     <section id="tab-body" class="tab-content">
-      <h2>✍️ 邮件正文</h2>
+      <h2>邮件正文</h2>
       <div class="card">
         <details class="user-info-details" open>
-          <summary>👤 个人信息 <span class="tip">用于替换 {姓名} {学校} 等变量</span></summary>
+          <summary>个人信息 <span class="tip">用于替换 {姓名} {学校} 等变量</span></summary>
           <div class="user-info-form">
             <div class="form-row">
               <div class="form-group flex-1"><label>姓名</label><input type="text" id="userName" placeholder="你的姓名"></div>
@@ -198,7 +202,7 @@
               <div class="form-group flex-1"><label>电话</label><input type="text" id="userPhone" placeholder="手机号"></div>
               <div class="form-group flex-1"><label>邮箱</label><input type="email" id="userEmail" placeholder="联系邮箱"></div>
             </div>
-            <div class="form-actions"><button class="btn btn-primary" id="saveUserInfoBtn">💾 保存个人信息</button></div>
+            <div class="form-actions"><button class="btn btn-primary" id="saveUserInfoBtn">保存个人信息</button></div>
           </div>
         </details>
 
@@ -214,12 +218,12 @@
               <textarea id="bodyEditor" rows="14"></textarea>
             </div>
             <div class="form-actions">
-              <button class="btn btn-primary" id="saveBodyBtn">💾 保存正文与主题</button>
+              <button class="btn btn-primary" id="saveBodyBtn">保存正文与主题</button>
             </div>
           </div>
           <div class="body-example-col">
             <div class="example-panel">
-              <h4>📝 参考示例</h4>
+              <h4>参考示例</h4>
               <div class="example-body">尊敬的HR：
 
 您好！
@@ -228,7 +232,7 @@
 
 电话/微信：{电话}
 邮箱：{邮箱}</div>
-              <p class="tip" style="margin-top:8px;">💡 用 <code>{变量名}</code> 自动替换为每封邮件对应的内容</p>
+              <p class="tip" style="margin-top:8px;">用 <code>{变量名}</code>自动替换为每封邮件对应的内容</p>
               <p class="tip">内置：<code>{公司名}</code> <code>{姓名}</code> <code>{学校}</code> <code>{专业}</code> <code>{年级}</code> <code>{电话}</code> <code>{邮箱}</code> <code>{技能}</code></p>
               <p class="tip" id="varHint"></p>
             </div>
@@ -237,7 +241,7 @@
 
         <hr class="divider">
 
-        <h3>🤖 AI 辅助撰写</h3>
+        <h3>AI 辅助撰写</h3>
         <p class="desc">让 AI 改写正文。填入的信息会一起发给模型，改完点「使用此正文」再保存。</p>
         <p class="tip" id="aiStatusBody"></p>
         <div class="chat-box">
@@ -254,11 +258,11 @@
 
     <!-- ═══ 4 附件 ═══ -->
     <section id="tab-attachments" class="tab-content">
-      <h2>📎 附件管理</h2>
-      <p class="desc">附件会附在每一封邮件上。建议文件名写清身份，如「戚俊皓-简历-金融.pdf」。</p>
+      <h2>附件管理</h2>
+      <p class="desc">附件会附在每一封邮件上。建议文件名写清身份，如「AutumnPants-简历-金融.pdf」。</p>
       <div class="card">
         <div class="upload-zone" id="attachUploadZone">
-          <p>📎 点击或拖拽文件到此处（单个 ≤ 25MB）</p>
+          <p>点击或拖拽文件到此处（单个 ≤ 25MB）</p>
           <input type="file" multiple id="attachFileInput" hidden>
         </div>
         <div id="attachList" class="file-list"></div>
@@ -267,7 +271,7 @@
 
     <!-- ═══ 5 AI 设置 ═══ -->
     <section id="tab-ai" class="tab-content">
-      <h2>🤖 AI 设置</h2>
+      <h2>AI 设置</h2>
       <p class="desc">选提供商 → 粘贴 API Key，接口地址和模型都预填好了。AI 用来把截图/聊天记录变成收件人、改写求职信。</p>
       <div class="card">
         <div class="form-group">
@@ -291,8 +295,8 @@
         </div>
         <div class="test-result" id="aiTestResult" style="display:none;"></div>
         <div class="form-actions">
-          <button class="btn btn-primary" id="saveAiBtn">💾 保存 AI 配置</button>
-          <button class="btn btn-secondary" id="testAiBtn">🔌 测试连接</button>
+          <button class="btn btn-primary" id="saveAiBtn">保存 AI 配置</button>
+          <button class="btn btn-secondary" id="testAiBtn">测试连接</button>
           <a class="ai-docs-link" id="aiDocsLink" href="#" target="_blank" rel="noopener" style="display:none;">去申请 Key</a>
         </div>
         <p class="tip" id="aiStatus" style="margin-top:10px;"></p>
@@ -301,7 +305,7 @@
       <div class="card">
         <h3>AI 在这三处起作用</h3>
         <ul class="plain-list">
-          <li><strong>截图 / 聊天记录 → 收件人</strong>：需要会看图的模型（列表里标 👁）</li>
+          <li><strong>截图 / 聊天记录 → 收件人</strong>：需要支持图片输入的模型</li>
           <li><strong>杂乱文字 → 公司、邮箱、岗位</strong>：任何模型都行</li>
           <li><strong>改写正文</strong>：保留 <code>{姓名}</code> <code>{公司名}</code> 这类变量</li>
         </ul>
@@ -311,7 +315,7 @@
 
     <!-- ═══ 6 发送 ═══ -->
     <section id="tab-send" class="tab-content">
-      <h2>🚀 预览 & 发送</h2>
+      <h2>预览 & 发送</h2>
       <div class="card">
         <div class="send-summary">
           <div class="stat"><span class="stat-label">收件人</span><span id="sendTotal" class="stat-value">0</span></div>
@@ -331,14 +335,14 @@
         <div id="sendPreview" class="preview-area"></div>
 
         <div class="send-actions">
-          <button class="btn btn-secondary" id="testBtn">✉️ 先发给自己</button>
-          <button class="btn btn-warning" id="draftBtn">📥 全部存草稿</button>
-          <button class="btn btn-danger" id="sendBtn">⚠️ 直接发送</button>
+          <button class="btn btn-secondary" id="testBtn">先发给自己</button>
+          <button class="btn btn-warning" id="draftBtn">全部存草稿</button>
+          <button class="btn btn-danger" id="sendBtn">直接发送</button>
         </div>
 
         <div id="sendWarning" class="warning-overlay" style="display:none;">
           <div class="warning-box">
-            <h2>⚠️ 直接发送确认</h2>
+            <h2>直接发送确认</h2>
             <p>邮件发出<strong>无法撤回</strong>。确认这几点：</p>
             <ul>
               <li>收件人邮箱与主题已在预览里逐条看过</li>
@@ -364,9 +368,9 @@
         </div>
 
         <div id="sendResult" style="display:none;">
-          <h3>📊 发送结果</h3>
+          <h3>发送结果</h3>
           <div class="result-summary" id="resultSummary"></div>
-          <div class="form-actions"><button class="btn btn-secondary" id="exportBtn">⬇️ 导出投递记录</button></div>
+          <div class="form-actions"><button class="btn btn-secondary" id="exportBtn">导出投递记录</button></div>
           <div class="table-wrap"><table id="resultTable"><thead><tr>
             <th>公司</th><th>邮箱</th><th>主题</th><th>状态</th><th>备注</th>
           </tr></thead><tbody></tbody></table></div>
@@ -376,14 +380,14 @@
 
     <!-- ═══ 6 投递记录 ═══ -->
     <section id="tab-logs" class="tab-content">
-      <h2>📋 投递记录</h2>
+      <h2>投递记录</h2>
 
       <div class="card">
         <div class="form-actions">
-          <button class="btn btn-primary" id="scanBtn">📬 检查退信与回复</button>
-          <button class="btn btn-secondary" id="refreshLogsBtn">🔄 刷新</button>
-          <button class="btn btn-secondary" id="exportLogsBtn">⬇️ 导出 Excel</button>
-          <button class="btn btn-danger" id="clearLogsBtn">🗑 清空日志</button>
+          <button class="btn btn-primary" id="scanBtn">检查退信与回复</button>
+          <button class="btn btn-secondary" id="refreshLogsBtn">刷新</button>
+          <button class="btn btn-secondary" id="exportLogsBtn">导出 Excel</button>
+          <button class="btn btn-danger" id="clearLogsBtn">清空日志</button>
         </div>
         <p class="tip" id="scanInfo">还没检查过收件箱。点「检查退信与回复」会读取最近 14 天的邮件（只读，不会改成已读）。</p>
 

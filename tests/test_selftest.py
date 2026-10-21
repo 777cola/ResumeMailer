@@ -87,13 +87,13 @@ def test_template_downloads():
 
 
 def test_render_subject_and_body():
-    user = {"姓名": "戚俊皓", "学校": "华东理工", "专业": "金融"}
+    user = {"姓名": "AutumnPants", "学校": "华东理工", "专业": "金融"}
     r = {"company": "某公司", "email": "a@b.com", "subject": "实习-{姓名}-{岗位}",
          "vars": {"岗位": "量化"}}
     out = render_email(r, user, "你好 {公司名}，我是{姓名}。", "实习申请-{姓名}")
-    assert out["subject"] == "实习-戚俊皓-量化", out["subject"]
-    assert out["body"] == "你好 某公司，我是戚俊皓。"
-    assert "戚俊皓" in out["html"]
+    assert out["subject"] == "实习-AutumnPants-量化", out["subject"]
+    assert out["body"] == "你好 某公司，我是AutumnPants。"
+    assert "AutumnPants" in out["html"]
 
 
 def test_render_unknown_kept():
@@ -110,8 +110,8 @@ def test_html_escaping():
 
 def test_message_headers():
     from config import EmailConfig
-    cfg = EmailConfig(email="me@qq.com", sender_name="戚俊皓")
-    msg = sender.build_message(cfg, "hr@corp.com", "实习申请-戚俊皓",
+    cfg = EmailConfig(email="me@qq.com", sender_name="AutumnPants")
+    msg = sender.build_message(cfg, "hr@corp.com", "实习申请-AutumnPants",
                                "正文第一行\n第二行", to_html("正文第一行\n第二行"),
                                [], cc_self=True)
     assert msg["Date"], "缺 Date 头"
@@ -123,15 +123,15 @@ def test_message_headers():
     import email
     from email import policy
     parsed = email.message_from_bytes(msg.as_bytes(), policy=policy.default)
-    assert parsed["Subject"] == "实习申请-戚俊皓", parsed["Subject"]
-    assert "戚俊皓" in str(parsed["From"])
+    assert parsed["Subject"] == "实习申请-AutumnPants", parsed["Subject"]
+    assert "AutumnPants" in str(parsed["From"])
     assert parsed["Cc"] == "me@qq.com"
 
 
 def test_attachment_name_roundtrip():
     import tempfile
     from config import EmailConfig
-    tmp = Path(tempfile.mkdtemp()) / "戚俊皓-简历.pdf"
+    tmp = Path(tempfile.mkdtemp()) / "AutumnPants-简历.pdf"
     tmp.write_bytes(b"%PDF-1.4 test")
     msg = sender.build_message(EmailConfig(email="me@qq.com"), "hr@corp.com",
                                "s", "b", "", [str(tmp)])
@@ -139,7 +139,7 @@ def test_attachment_name_roundtrip():
     from email import policy
     parsed = email.message_from_bytes(msg.as_bytes(), policy=policy.default)
     names = [p.get_filename() for p in parsed.walk() if p.get_filename()]
-    assert names == ["戚俊皓-简历.pdf"], names
+    assert names == ["AutumnPants-简历.pdf"], names
 
 
 def test_imap_utf7():

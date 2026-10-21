@@ -797,9 +797,9 @@ def start():
     port = int(os.environ.get("PORT", 8765))
     host = os.environ.get("HOST", "127.0.0.1")
     is_cloud = host == "0.0.0.0"
-    print(f"🚀 ResumeMailer 已启动 → http://localhost:{port}")
+    print(f" ResumeMailer 已启动 → http://localhost:{port}")
     if is_cloud and not ACCESS_TOKEN:
-        print("⚠️  公网监听但未设置 RESUMEMAILER_TOKEN，任何人可访问你的配置与附件")
+        print("公网监听但未设置 RESUMEMAILER_TOKEN，任何人可访问你的配置与附件")
     if not is_cloud:
         webbrowser.open(f"http://localhost:{port}")
     uvicorn.run(app, host=host, port=port, log_level="info")

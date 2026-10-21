@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://resumemailer.qijunhao.xyz">
-    <img src="https://img.shields.io/badge/🌐_Live_Demo-在线演示-1A4B8C?style=for-the-badge" alt="在线演示">
+    <img src="https://img.shields.io/badge/Live_Demo-在线演示-1A4B8C?style=for-the-badge" alt="在线演示">
   </a>
   <a href="https://github.com/777cola/ResumeMailer">
     <img src="https://img.shields.io/badge/GitHub-仓库-181717?style=for-the-badge&logo=github" alt="GitHub">
@@ -29,34 +29,33 @@
 
 不是邮件营销工具，没有订阅名单、没有打开率追踪，只做投递这一件事。
 
-## ✨ 功能
+## 功能
 
 | 功能 | 说明 |
 |------|------|
-| 📄 **表格导入** | `.xlsx` / `.csv`，也可直接从 Excel 复制粘贴。列名支持「公司/单位/企业」「邮箱/邮件/email」等别名 |
-| 🧩 **任意列变变量** | 表格里加一列「岗位」，正文和主题就能写 `{岗位}`；一期一岗、一司一主题 |
-| 🧾 **主题也做替换** | `实习申请-{姓名}-{学校}-{岗位}` 按行渲染（很多同类工具只替换正文） |
-| 👁 **发送前预览** | 服务端渲染，所见即所发；正文/主题/收件人逐封对照 |
-| ✉️ **先发给自己** | 一键把第一封发到自己邮箱，确认排版和附件名 |
-| 📥 **存草稿 / 直发** | 存草稿可先在网页邮箱里逐封检查再点发送；直发有二次确认 |
-| 📊 **实时进度 + 停止** | 后台任务 + 轮询，50 封不卡页面，随时中止 |
-| 🚦 **限速与日上限** | 按分钟限速并带随机抖动；QQ 个人邮箱约 50 封/天，到顶自动停并说明原因 |
-| 🔁 **防重复投递** | 批内去重 + 对照历史记录提醒「这家你投过了」，可选择跳过 |
-| 📎 **附件正确编码** | 中文文件名（`戚俊皓-简历.pdf`）在 Outlook/Foxmail 里不乱码；超 25MB 提前拦下 |
-| 🧯 **失败可重跑** | 网络抖动自动重连重试；修好后重跑并勾选「跳过已投递」即只补发失败项 |
-| 📬 **退信检测** | 扫收件箱里的 Mailer-Daemon，把死地址标出来，下次发送自动跳过 |
-| 💬 **回复识别** | 按发件地址 + `In-Reply-To` 匹配，HR 换邮箱回信也能认出来 |
-| 📋 **投递记录导出** | 一键导出 Excel，用于跟进（谁投了、什么时候、成没成） |
-| 🔒 **纯本地** | 邮箱授权码、API Key 只写在本机 `~/.resumemailer/`，文件权限 600；不上传任何服务器 |
+| **表格导入** | `.xlsx` / `.csv`，也可直接从 Excel 复制粘贴。列名支持「公司/单位/企业」「邮箱/邮件/email」等别名 |
+| **任意列变变量** | 表格里加一列「岗位」，正文和主题就能写 `{岗位}`；一期一岗、一司一主题 |
+| **主题也做替换** | `实习申请-{姓名}-{学校}-{岗位}` 按行渲染（很多同类工具只替换正文） |
+| **发送前预览** | 服务端渲染，所见即所发；正文/主题/收件人逐封对照 |
+| **先发给自己** | 一键把第一封发到自己邮箱，确认排版和附件名 |
+| **存草稿 / 直发** | 存草稿可先在网页邮箱里逐封检查再点发送；直发有二次确认 |
+| **实时进度 + 停止** | 后台任务 + 轮询，50 封不卡页面，随时中止 |
+| **限速与日上限** | 按分钟限速并带随机抖动；QQ 个人邮箱约 50 封/天，到顶自动停并说明原因 |
+| **防重复投递** | 批内去重 + 对照历史记录提醒「这家你投过了」，可选择跳过 |
+| **附件正确编码** | 中文文件名（`AutumnPants-简历.pdf`）在 Outlook/Foxmail 里不乱码；超 25MB 提前拦下 |
+| **失败可重跑** | 网络抖动自动重连重试；修好后重跑并勾选「跳过已投递」即只补发失败项 |
+| **退信检测** | 扫收件箱里的 Mailer-Daemon，把死地址标出来，下次发送自动跳过 |
+| **回复识别** | 按发件地址 + `In-Reply-To` 匹配，HR 换邮箱回信也能认出来 |
+| **投递记录导出** | 一键导出 Excel，用于跟进（谁投了、什么时候、成没成） |
+| **纯本地** | 邮箱授权码、API Key 只写在本机 `~/.resumemailer/`，文件权限 600；不上传任何服务器 |
 
-## 📦 下载安装（推荐给同学）
+## 下载安装（推荐给同学）
 
 到 [Releases](https://github.com/777cola/ResumeMailer/releases) 下载对应安装包，**不需要装 Python**：
 
 | 系统 | 文件 | 打开方式 |
 |---|---|---|
 | macOS（Apple 芯片 M1–M4） | `ResumeMailer-macos-arm64.zip` | 解压 → 把 `ResumeMailer.app` 拖进「应用程序」→ 双击 |
-| macOS（Intel） | `ResumeMailer-macos-x64.zip` | 同上 |
 | Windows 10/11 | `ResumeMailer-windows-x64.zip` | 解压 → 双击 `ResumeMailer\ResumeMailer.exe` |
 
 安装包没做代码签名，第一次打开会被拦：
@@ -65,14 +64,14 @@
 - **Windows**：SmartScreen 提示时点「更多信息」→「仍要运行」
 - 数据都存在 `~/.resumemailer`（Windows 是 `C:\Users\你\.resumemailer`），关掉窗口不会丢
 
-## 🖱 不想敲命令
+## 不想敲命令
 
 - **macOS**：双击 `启动.command`
 - **Windows**：双击 `启动.bat`
 
 首次会自动创建虚拟环境、装依赖（约 1 分钟），之后双击即用，浏览器自动打开。前提是本机有 Python 3.10+。
 
-## 🚀 快速开始
+## 快速开始
 
 ```bash
 git clone https://github.com/777cola/ResumeMailer.git
@@ -85,7 +84,7 @@ python main.py          # → http://localhost:8765
 
 ### 0. 三分钟上手（应用内）
 
-打开后进「📖 上手」页，会看到一份会自动打勾的清单（配置邮箱 → 导入收件人 → 正文 → 附件 → 发给自己 → 投递）。
+打开后进「上手」页，会看到一份会自动打勾的清单（配置邮箱 → 导入收件人 → 正文 → 附件 → 发给自己 → 投递）。
 不想填表也能体验：点「载入示例数据」→「试跑一遍」，整个流程会真实渲染主题、正文和附件，但**不会发出任何邮件**。示例用的是 `example.com` 保留域名。
 
 ### 1. 邮箱配置
@@ -117,7 +116,7 @@ python main.py          # → http://localhost:8765
 
 ### 4. 投递之后
 
-进「📋 投递记录」点「检查退信与回复」：只读最近 14 天收件箱（不会把邮件改成已读），
+进「投递记录」点「检查退信与回复」：只读最近 14 天收件箱（不会把邮件改成已读），
 把 `Mailer-Daemon` 的退信地址标成死址，把对方回信标成「已回复」。
 下次发送时，退信过的地址会**自动跳过**并在结果里写明原因；确实想重试，勾选「忽略退信记录」。
 
@@ -127,7 +126,7 @@ python main.py          # → http://localhost:8765
 2. 回发送页看预检：未识别变量、空变量、重复投递、没有附件、超出日上限都会标出来
 3. 「全部存草稿」→ 去网页邮箱逐封检查后一起发；或「直接发送」→ 输入「确认发送」
 
-## 🧭 常见失败原因
+## 常见失败原因
 
 | 现象 | 原因 | 处理 |
 |------|------|------|
@@ -137,7 +136,7 @@ python main.py          # → http://localhost:8765
 | 后半段全失败 | 触发每日发信上限 | 设「每日上限」，第二天继续；QQ 个人邮箱约 50 封/天 |
 | 进了垃圾箱 | 新邮箱、短时间大量同文邮件 | 降速到 10 封/分、正文带姓名和岗位、别用群发式开头 |
 
-## ☁️ 部署
+## 部署
 
 ### 本地（推荐）
 `python main.py`，只监听 `127.0.0.1`。邮箱授权码不出本机。
@@ -154,11 +153,11 @@ docker run -d -p 8765:8765 -v resumemailer-data:/data -e RESUMEMAILER_TOKEN=换�
 
 | 平台 | 持久存储 | 费用 | 休眠 |
 |------|---------|------|------|
-| Render Free | ✅ 1GB | 免费 | 15 分钟无访问 |
-| Render Starter | ✅ | $7/月 | 不休眠 |
-| Docker 自部署 | ✅ 卷挂载 | VPS 费用 | 可控 |
+| Render Free | 1GB | 免费 | 15 分钟无访问 |
+| Render Starter | | $7/月 | 不休眠 |
+| Docker 自部署 | 卷挂载 | VPS 费用 | 可控 |
 
-## 🛠 自己打包
+## 自己打包
 
 ```bash
 pip install -r requirements.txt pyinstaller
@@ -166,13 +165,13 @@ pyinstaller packaging/resumemailer.spec --noconfirm
 # macOS → dist/ResumeMailer.app ；Windows → dist/ResumeMailer/ResumeMailer.exe
 ```
 
-推一个 `v*` tag 会在 GitHub Actions 上自动构建三个平台（macOS arm64 / macOS Intel / Windows）并挂到 Release：
+推一个 `v*` tag 会在 GitHub Actions 上自动构建两个平台（macOS Apple 芯片 / Windows）并挂到 Release：
 
 ```bash
 git tag v1.0.0 && git push origin v1.0.0
 ```
 
-## 🧱 项目结构
+## 项目结构
 
 ```
 resumemailer/
@@ -194,7 +193,7 @@ resumemailer/
 python tests/test_selftest.py     # 23/23 passed
 ```
 
-## ❓ FAQ
+## FAQ
 
 **会泄露我的邮箱授权码吗？**
 不会。配置写在 `~/.resumemailer/config.json`（权限 600），只在本地进程使用。仅在你自己配置了 AI Key 并点击 AI 功能时，正文会发给对应 AI 厂商。
@@ -211,6 +210,6 @@ python tests/test_selftest.py     # 23/23 passed
 **邮件发出去能撤回吗？**
 不能。所以有「先发给自己」和「存草稿」两条路。
 
-## 📄 License
+## License
 
 MIT © [AutumnPants](https://github.com/777cola)
