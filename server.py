@@ -19,7 +19,7 @@ from config import (EMAIL_PRESETS, load_config, save_config, EmailConfig, ATTACH
                     DEFAULT_BODY_TEMPLATE, DEFAULT_SUBJECT_TEMPLATE)
 from engine.excel_parser import generate_template, parse_workbook, parse_tsv
 from engine.ai_filler import (ai_chat, ai_fill_template, ai_extract_images,
-                             ai_generate_body, get_available_providers)
+                             ai_generate_body, get_available_providers, ai_test)
 from engine.sender import test_connection, send_test
 from engine.bounce import scan_inbox
 from engine import delivery
@@ -160,6 +160,8 @@ def _config_payload() -> dict:
             "provider": cfg.ai.provider,
             "api_key": bool(cfg.ai.api_key),
             "model": cfg.ai.model,
+            "base_url": cfg.ai.base_url,
+            "configured": bool(cfg.ai.provider and cfg.ai.api_key and cfg.ai.model),
         },
         "user": {
             "name": cfg.user.name, "school": cfg.user.school, "major": cfg.user.major,
@@ -206,6 +208,8 @@ def save_ai_config(data: dict):
         cfg.ai.provider = data["provider"]
     if data.get("model"):
         cfg.ai.model = data["model"]
+    if "base_url" in data:
+        cfg.ai.base_url = str(data.get("base_url") or "").strip()
     if data.get("api_key"):
         cfg.ai.api_key = str(data["api_key"]).strip()
     save_config(cfg)
@@ -402,31 +406,53 @@ def _ai_params(data: dict):
     provider = data.get("provider") or cfg.ai.provider
     model = data.get("model") or cfg.ai.model
     key = data.get("api_key") or cfg.ai.api_key
+    base_url = data.get("base_url") or cfg.ai.base_url
     if not provider or not key or not model:
-        raise HTTPException(400, "请先配置 AI 提供商、API Key 和模型（保存过即可，不必每次重填）")
-    return provider, key, model
+        raise HTTPException(400, "还没配 AI：去「AI 设置」选一个提供商、粘贴 Key 就能用")
+    if provider == "自定义（OpenAI 兼容）" and not base_url:
+        raise HTTPException(400, "自定义提供商需要填 Base URL（形如 https://xxx/v1）")
+    return provider, key, model, base_url
+
+
+@app.post("/api/ai/test")
+def ai_test_endpoint(data: dict):
+    cfg = load_config()
+    provider = data.get("provider") or cfg.ai.provider
+    model = data.get("model") or cfg.ai.model
+    key = data.get("api_key") or cfg.ai.api_key
+    base_url = data.get("base_url") or cfg.ai.base_url
+    if not provider or not model:
+        raise HTTPException(400, "先选提供商和模型")
+    if not key:
+        raise HTTPException(400, "先粘贴 API Key")
+    try:
+        out = ai_test(provider, key, model, base_url=base_url)
+        return {"ok": True, **out, "provider": provider, "model": model}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
 
 
 @app.post("/api/ai/chat")
 def ai_chat_endpoint(data: dict):
-    provider, key, model = _ai_params(data)
+    provider, key, model, base_url = _ai_params(data)
     messages = data.get("messages") or []
     if not messages:
         raise HTTPException(400, "消息不能为空")
     try:
-        return {"ok": True, "content": ai_chat(provider, key, model, messages)}
+        return {"ok": True, "content": ai_chat(provider, key, model, messages,
+                                               base_url=base_url)}
     except Exception as e:
         return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
 
 
 @app.post("/api/ai/fill-template")
 def ai_fill(data: dict):
-    provider, key, model = _ai_params(data)
+    provider, key, model, base_url = _ai_params(data)
     text = (data.get("input") or "").strip()
     if not text:
         raise HTTPException(400, "输入内容不能为空")
     try:
-        rows = ai_fill_template(provider, key, model, text)
+        rows = ai_fill_template(provider, key, model, text, base_url=base_url)
         recipients = []
         for i, r in enumerate(rows if isinstance(rows, list) else []):
             recipients.append({
@@ -453,6 +479,7 @@ async def ai_parse_images(files: list[UploadFile] = File(...),
     provider = provider or cfg.ai.provider
     model = model or cfg.ai.model
     key = api_key or cfg.ai.api_key
+    base_url = cfg.ai.base_url
     if not provider or not model or not key:
         raise HTTPException(400, "先选一个支持看图的模型并填 API Key（GPT-4o / Claude / qwen-vl-max / glm-4v-plus）")
 
@@ -469,7 +496,8 @@ async def ai_parse_images(files: list[UploadFile] = File(...),
         raise HTTPException(400, "没有收到图片")
 
     try:
-        rows = ai_extract_images(provider, key, model, images, hint=hint.strip())
+        rows = ai_extract_images(provider, key, model, images, hint=hint.strip(),
+                                 base_url=base_url)
         recipients = [{"seq": i + 1, "company": r.get("company", ""),
                        "email": r.get("email", ""), "subject": r.get("subject", ""),
                        "vars": r.get("vars") or {}} for i, r in enumerate(rows)]
@@ -483,7 +511,7 @@ async def ai_parse_images(files: list[UploadFile] = File(...),
 
 @app.post("/api/ai/generate-body")
 def ai_gen_body(data: dict):
-    provider, key, model = _ai_params(data)
+    provider, key, model, base_url = _ai_params(data)
     instruction = (data.get("instruction") or "").strip()
     if not instruction:
         raise HTTPException(400, "请输入修改要求")
@@ -492,7 +520,8 @@ def ai_gen_body(data: dict):
         content = ai_generate_body(provider, key, model, instruction,
                                    current_body=data.get("current_body", cfg.body_template),
                                    user={"姓名": cfg.user.name, "学校": cfg.user.school,
-                                         "专业": cfg.user.major, "年级": cfg.user.grade})
+                                         "专业": cfg.user.major, "年级": cfg.user.grade},
+                                   base_url=base_url)
         return {"ok": True, "content": content}
     except Exception as e:
         return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})

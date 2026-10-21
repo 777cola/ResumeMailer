@@ -1,5 +1,15 @@
 # 更新日志
 
+## v5.0 — AI 设置独立模块 + 桌面安装包
+
+- 新增「🤖 AI 设置」页：8 个提供商卡片，选中即预填接口地址与模型，只需粘贴 Key。
+  每个提供商带「去申请 Key」链接；「测试连接」发一句话验证 Key 与延迟。
+- 支持「自定义（OpenAI 兼容）」：填 Base URL + 模型名即可接任意中转/自建服务。
+- 收件人页、正文页的内联 AI 配置收进这一页，未配置时给出去设置的入口；不配 AI 也能正常投递。
+- 打包：PyInstaller spec + GitHub Actions 三平台构建（macOS arm64 / macOS Intel / Windows）。
+  macOS `.app` 已本地验证：30MB、双击启动、静态资源与服务正常。
+- 新增打包入口 `packaging/app_entry.py`（支持 `RESUMEMAILER_PORT` 改端口、`RESUMEMAILER_NO_BROWSER` 测试用）。
+
 ## v4.1 — 截图导入 + 说清定位
 
 - 新增「🖼 截图 / 图片」导入：招聘群聊天记录、岗位截图、表格照片，最多 6 张，

@@ -2,11 +2,12 @@
 import base64
 import json
 import re
+import time
 from typing import Optional
 
 import httpx
 
-from config import AI_PRESETS
+from config import AI_PRESETS, ai_base_url
 
 
 def _openai_chat(base_url: str, api_key: str, model: str, messages: list, timeout: int = 90) -> str:
@@ -51,13 +52,26 @@ def _friendly_http_error(resp) -> str:
     return f"AI 接口返回 {resp.status_code}{('：' + hint) if hint else ''}（{body}）"
 
 
-def ai_chat(provider: str, api_key: str, model: str, messages: list, timeout: int = 90) -> str:
-    preset = AI_PRESETS.get(provider)
-    if not preset:
+def ai_chat(provider: str, api_key: str, model: str, messages: list,
+            timeout: int = 90, base_url: str = "") -> str:
+    if provider not in AI_PRESETS:
         raise ValueError(f"不支持的 AI 提供商: {provider}")
     if provider == "Claude":
         return _claude_chat(api_key, model, messages, timeout)
-    return _openai_chat(preset["base_url"], api_key, model, messages, timeout)
+    base = ai_base_url(provider, base_url)
+    if not base:
+        raise ValueError("「自定义」需要填写 Base URL（形如 https://xxx/v1）")
+    return _openai_chat(base, api_key, model, messages, timeout)
+
+
+def ai_test(provider: str, api_key: str, model: str, base_url: str = "") -> dict:
+    """用一句话验证 Key 能不能用，返回耗时"""
+    started = time.time()
+    reply = ai_chat(provider, api_key, model,
+                    [{"role": "user", "content": "只回复两个字母：ok"}],
+                    timeout=30, base_url=base_url)
+    return {"reply": (reply or "").strip()[:40],
+            "latency_ms": int((time.time() - started) * 1000)}
 
 
 def _extract_json(content: str):
@@ -115,23 +129,24 @@ def _normalize_rows(data) -> list:
     return out
 
 
-def ai_fill_template(provider: str, api_key: str, model: str, user_input: str) -> list:
+def ai_fill_template(provider: str, api_key: str, model: str, user_input: str,
+                     base_url: str = "") -> list:
     """从粘贴的乱七八糟文本里提取收件人；额外字段（岗位/城市/HR）进 vars"""
     content = ai_chat(provider, api_key, model, [
         {"role": "system", "content": EXTRACT_SYSTEM},
         {"role": "user", "content": f"从下面内容中提取收件人：\n\n{user_input}"},
-    ])
+    ], base_url=base_url)
     return _normalize_rows(_extract_json(content))
 
 
 def ai_extract_images(provider: str, api_key: str, model: str,
-                      images: list, hint: str = "") -> list:
+                      images: list, hint: str = "", base_url: str = "") -> list:
     """从截图/照片里提取收件人。images: [(bytes, mime)]"""
     if not images:
         raise ValueError("没有图片")
-    preset = AI_PRESETS.get(provider)
-    if not preset:
+    if provider not in AI_PRESETS:
         raise ValueError(f"不支持的 AI 提供商: {provider}")
+    base = ai_base_url(provider, base_url)
     text = EXTRACT_SYSTEM + (f"\n补充说明：{hint}" if hint else "")
 
     if provider == "Claude":
@@ -157,7 +172,9 @@ def ai_extract_images(provider: str, api_key: str, model: str,
             content.append({"type": "image_url",
                             "image_url": {"url": f"data:{mime or 'image/png'};base64,"
                                                  f"{base64.b64encode(data).decode()}"}})
-        resp = httpx.post(f"{preset['base_url'].rstrip('/')}/chat/completions",
+        if not base:
+            raise ValueError("「自定义」需要填写 Base URL")
+        resp = httpx.post(f"{base}/chat/completions",
                           headers={"Authorization": f"Bearer {api_key}",
                                    "Content-Type": "application/json"},
                           json={"model": model, "temperature": 0.2,
@@ -171,7 +188,8 @@ def ai_extract_images(provider: str, api_key: str, model: str,
 
 
 def ai_generate_body(provider: str, api_key: str, model: str, instruction: str,
-                     current_body: str = "", user: Optional[dict] = None) -> str:
+                     current_body: str = "", user: Optional[dict] = None,
+                     base_url: str = "") -> str:
     """改写/生成求职邮件正文。带上当前正文和个人信息，避免模型瞎编"""
     user = user or {}
     facts = "、".join(f"{k}：{v}" for k, v in user.items() if v) or "（用户未填写）"
@@ -187,9 +205,10 @@ def ai_generate_body(provider: str, api_key: str, model: str, instruction: str,
         messages.append({"role": "user", "content": f"按以下要求修改：{instruction}"})
     else:
         messages.append({"role": "user", "content": instruction})
-    return ai_chat(provider, api_key, model, messages).strip()
+    return ai_chat(provider, api_key, model, messages, base_url=base_url).strip()
 
 
 def get_available_providers() -> list:
-    return [{"name": name, "models": info["models"], "base_url": info["base_url"]}
+    return [{"name": name, "models": info["models"], "base_url": info["base_url"],
+             "docs": info.get("docs", ""), "vision": info.get("vision", [])}
             for name, info in AI_PRESETS.items()]

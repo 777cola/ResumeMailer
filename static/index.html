@@ -19,6 +19,7 @@
       <button class="tab" data-tab="recipients">👥 收件人</button>
       <button class="tab" data-tab="body">✍️ 正文</button>
       <button class="tab" data-tab="attachments">📎 附件</button>
+      <button class="tab" data-tab="ai">🤖 AI 设置</button>
       <button class="tab" data-tab="send">🚀 发送</button>
       <button class="tab" data-tab="logs">📋 日志</button>
     </nav>
@@ -118,12 +119,7 @@
     <section id="tab-recipients" class="tab-content">
       <h2>👥 收件人列表</h2>
       <div class="card">
-        <div class="ai-config-mini">
-          <select id="aiProvider2"></select>
-          <input type="text" id="aiModel2" placeholder="模型名">
-          <input type="password" id="aiKey2" placeholder="API Key（已保存可留空）">
-          <span class="tip" style="align-self:center;">只有「文字 / 截图」两种导入需要 AI</span>
-        </div>
+        <p class="tip" id="aiStatusRecipients" style="margin-bottom:10px;"></p>
 
         <div class="sub-tabs">
           <button class="sub-tab active" data-method="excel">📄 上传表格</button>
@@ -243,11 +239,7 @@
 
         <h3>🤖 AI 辅助撰写</h3>
         <p class="desc">让 AI 改写正文。填入的信息会一起发给模型，改完点「使用此正文」再保存。</p>
-        <div class="ai-config-mini">
-          <select id="aiProvider3"></select>
-          <input type="text" id="aiModel3" placeholder="模型名">
-          <input type="password" id="aiKey3" placeholder="API Key（已保存可留空）">
-        </div>
+        <p class="tip" id="aiStatusBody"></p>
         <div class="chat-box">
           <div class="chat-msgs" id="bodyChatMsgs">
             <div class="chat-msg assistant">你好！告诉我你想要什么样的正文，或者直接说「帮我写一封量化实习申请」。</div>
@@ -273,7 +265,51 @@
       </div>
     </section>
 
-    <!-- ═══ 5 发送 ═══ -->
+    <!-- ═══ 5 AI 设置 ═══ -->
+    <section id="tab-ai" class="tab-content">
+      <h2>🤖 AI 设置</h2>
+      <p class="desc">选提供商 → 粘贴 API Key，接口地址和模型都预填好了。AI 用来把截图/聊天记录变成收件人、改写求职信。</p>
+      <div class="card">
+        <div class="form-group">
+          <label>模型提供商</label>
+          <div id="aiProviderCards" class="provider-grid"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label>模型 <span class="tip" id="aiVisionHint"></span></label>
+            <select id="aiModelSelect"></select>
+            <input type="text" id="aiModelCustom" placeholder="自定义模型名" style="display:none;margin-top:8px;">
+          </div>
+          <div class="form-group flex-1">
+            <label>API Key</label>
+            <input type="password" id="aiKeyInput" placeholder="粘贴这里，保存过可留空" autocomplete="new-password">
+          </div>
+        </div>
+        <div class="form-group" id="aiBaseUrlGroup" style="display:none;">
+          <label>Base URL <span class="tip">OpenAI 兼容地址，形如 https://xxx/v1</span></label>
+          <input type="text" id="aiBaseUrlInput" placeholder="https://api.example.com/v1">
+        </div>
+        <div class="test-result" id="aiTestResult" style="display:none;"></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="saveAiBtn">💾 保存 AI 配置</button>
+          <button class="btn btn-secondary" id="testAiBtn">🔌 测试连接</button>
+          <a class="ai-docs-link" id="aiDocsLink" href="#" target="_blank" rel="noopener" style="display:none;">去申请 Key</a>
+        </div>
+        <p class="tip" id="aiStatus" style="margin-top:10px;"></p>
+      </div>
+
+      <div class="card">
+        <h3>AI 在这三处起作用</h3>
+        <ul class="plain-list">
+          <li><strong>截图 / 聊天记录 → 收件人</strong>：需要会看图的模型（列表里标 👁）</li>
+          <li><strong>杂乱文字 → 公司、邮箱、岗位</strong>：任何模型都行</li>
+          <li><strong>改写正文</strong>：保留 <code>{姓名}</code> <code>{公司名}</code> 这类变量</li>
+        </ul>
+        <p class="tip">不配 AI 也能正常用：表格导入、模板变量、批量发送都不依赖 AI。</p>
+      </div>
+    </section>
+
+    <!-- ═══ 6 发送 ═══ -->
     <section id="tab-send" class="tab-content">
       <h2>🚀 预览 & 发送</h2>
       <div class="card">

@@ -49,6 +49,22 @@
 | 📋 **投递记录导出** | 一键导出 Excel，用于跟进（谁投了、什么时候、成没成） |
 | 🔒 **纯本地** | 邮箱授权码、API Key 只写在本机 `~/.resumemailer/`，文件权限 600；不上传任何服务器 |
 
+## 📦 下载安装（推荐给同学）
+
+到 [Releases](https://github.com/777cola/ResumeMailer/releases) 下载对应安装包，**不需要装 Python**：
+
+| 系统 | 文件 | 打开方式 |
+|---|---|---|
+| macOS（Apple 芯片 M1–M4） | `ResumeMailer-macos-arm64.zip` | 解压 → 把 `ResumeMailer.app` 拖进「应用程序」→ 双击 |
+| macOS（Intel） | `ResumeMailer-macos-x64.zip` | 同上 |
+| Windows 10/11 | `ResumeMailer-windows-x64.zip` | 解压 → 双击 `ResumeMailer\ResumeMailer.exe` |
+
+安装包没做代码签名，第一次打开会被拦：
+
+- **macOS**：右键点 `ResumeMailer.app` → 打开 → 再点「打开」；或终端执行 `xattr -dr com.apple.quarantine /Applications/ResumeMailer.app`
+- **Windows**：SmartScreen 提示时点「更多信息」→「仍要运行」
+- 数据都存在 `~/.resumemailer`（Windows 是 `C:\Users\你\.resumemailer`），关掉窗口不会丢
+
 ## 🖱 不想敲命令
 
 - **macOS**：双击 `启动.command`
@@ -141,6 +157,20 @@ docker run -d -p 8765:8765 -v resumemailer-data:/data -e RESUMEMAILER_TOKEN=换�
 | Render Free | ✅ 1GB | 免费 | 15 分钟无访问 |
 | Render Starter | ✅ | $7/月 | 不休眠 |
 | Docker 自部署 | ✅ 卷挂载 | VPS 费用 | 可控 |
+
+## 🛠 自己打包
+
+```bash
+pip install -r requirements.txt pyinstaller
+pyinstaller packaging/resumemailer.spec --noconfirm
+# macOS → dist/ResumeMailer.app ；Windows → dist/ResumeMailer/ResumeMailer.exe
+```
+
+推一个 `v*` tag 会在 GitHub Actions 上自动构建三个平台（macOS arm64 / macOS Intel / Windows）并挂到 Release：
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
 
 ## 🧱 项目结构
 

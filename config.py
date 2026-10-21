@@ -22,15 +22,57 @@ EMAIL_PRESETS = {
     "Foxmail":    {"smtp_host": "smtp.qq.com",     "smtp_port": 465, "imap_host": "imap.qq.com",     "imap_port": 993, "use_ssl": True,  "daily_hint": 50},
 }
 
-# AI 模型预设（2026年6月更新）
+# AI 模型预设（2026年10月更新）
+# docs = 申请 API Key 的页面；vision = 能看图的模型（截图导入收件人要用）
 AI_PRESETS = {
-    "DeepSeek":  {"base_url": "https://api.deepseek.com/v1",         "models": ["deepseek-chat","deepseek-reasoner"]},
-    "GLM (智谱)":{"base_url": "https://open.bigmodel.cn/api/paas/v4","models": ["glm-4-plus","glm-4-air-0111","glm-4-flash"]},
-    "MIMO":      {"base_url": "https://api.xiaomimimo.com/v1",       "models": ["mimo-v2.5","mimo-v2.5-turbo","mimo-pro"]},
-    "ChatGPT":   {"base_url": "https://api.openai.com/v1",          "models": ["gpt-4.1","gpt-4o","gpt-4o-mini","o3","o4-mini"]},
-    "Claude":    {"base_url": "https://api.anthropic.com/v1",       "models": ["claude-sonnet-4","claude-4-opus","claude-haiku-3-5"]},
-    "Kimi":      {"base_url": "https://api.moonshot.cn/v1",          "models": ["moonshot-v1-8k","moonshot-v1-32k","kimi-k2-0905-preview"]},
-    "通义千问":   {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "models": ["qwen-plus","qwen-max","qwen-turbo"]},
+    "DeepSeek": {
+        "base_url": "https://api.deepseek.com/v1",
+        "models": ["deepseek-chat", "deepseek-reasoner"],
+        "docs": "https://platform.deepseek.com/api_keys",
+        "vision": [],
+    },
+    "MIMO（小米）": {
+        "base_url": "https://api.xiaomimimo.com/v1",
+        "models": ["mimo-v2.5", "mimo-v2.5-turbo", "mimo-pro"],
+        "docs": "",
+        "vision": [],
+    },
+    "ChatGPT": {
+        "base_url": "https://api.openai.com/v1",
+        "models": ["gpt-4o", "gpt-4.1", "gpt-4o-mini", "o4-mini"],
+        "docs": "https://platform.openai.com/api-keys",
+        "vision": ["gpt-4o", "gpt-4.1"],
+    },
+    "Claude": {
+        "base_url": "https://api.anthropic.com/v1",
+        "models": ["claude-sonnet-4", "claude-4-opus", "claude-haiku-3-5"],
+        "docs": "https://console.anthropic.com/settings/keys",
+        "vision": ["claude-sonnet-4", "claude-4-opus"],
+    },
+    "GLM（智谱）": {
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "models": ["glm-4-plus", "glm-4-air-0111", "glm-4-flash", "glm-4v-plus"],
+        "docs": "https://open.bigmodel.cn/usercenter/apikeys",
+        "vision": ["glm-4v-plus"],
+    },
+    "Kimi（月之暗面）": {
+        "base_url": "https://api.moonshot.cn/v1",
+        "models": ["moonshot-v1-8k", "moonshot-v1-32k", "kimi-k2-0905-preview"],
+        "docs": "https://platform.moonshot.cn/console/api-keys",
+        "vision": [],
+    },
+    "通义千问（阿里）": {
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "models": ["qwen-plus", "qwen-max", "qwen-turbo", "qwen-vl-max"],
+        "docs": "https://bailian.console.aliyun.com/",
+        "vision": ["qwen-vl-max"],
+    },
+    "自定义（OpenAI 兼容）": {
+        "base_url": "",
+        "models": [],
+        "docs": "",
+        "vision": [],
+    },
 }
 
 # 默认正文模板（通用示例）
@@ -73,6 +115,7 @@ class AIConfig:
     provider: str = ""
     api_key: str = ""
     model: str = ""
+    base_url: str = ""      # 仅「自定义」需要
 
 
 @dataclass
@@ -119,6 +162,12 @@ def _ensure_dir():
     ATTACH_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def ai_base_url(provider: str, custom: str = "") -> str:
+    if provider == "自定义（OpenAI 兼容）":
+        return (custom or "").strip().rstrip("/")
+    return AI_PRESETS.get(provider, {}).get("base_url", "").rstrip("/")
+
+
 def load_config() -> AppConfig:
     _ensure_dir()
     if not CONFIG_FILE.exists():
@@ -129,7 +178,8 @@ def load_config() -> AppConfig:
         data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
         cfg = AppConfig()
         cfg.email = EmailConfig(**data.get("email", {}))
-        cfg.ai = AIConfig(**data.get("ai", {}))
+        cfg.ai = AIConfig(**{k: v for k, v in data.get("ai", {}).items()
+                             if k in ("provider", "api_key", "model", "base_url")})
         cfg.user = UserInfo(**data.get("user", {}))
         cfg.body_template = data.get("body_template", DEFAULT_BODY_TEMPLATE)
         cfg.subject_template = data.get("subject_template", DEFAULT_SUBJECT_TEMPLATE)

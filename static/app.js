@@ -291,17 +291,16 @@ document.addEventListener('paste', e => {
 
 $('imageParseBtn').addEventListener('click', async () => {
   if (!pendingImages.length) { toast('先拖一张截图进来', 'error'); return; }
-  const p = aiParams(2);
-  if (!p.provider || !p.model) { toast('先选一个会看图的模型', 'error'); return; }
+  if (!aiConfigured()) {
+    toast('先去「AI 设置」选一个会看图的模型、粘贴 Key', 'error', 6000);
+    switchTab('ai'); return;
+  }
   if (recipients.length && !confirm(`识别结果会替换当前的 ${recipients.length} 条收件人，继续？`)) return;
 
   const btn = $('imageParseBtn');
   btn.disabled = true; btn.textContent = '识别中…（大图要十几秒）';
   const fd = new FormData();
   pendingImages.forEach(f => fd.append('files', f));
-  fd.append('provider', p.provider);
-  fd.append('model', p.model);
-  fd.append('api_key', p.api_key);
   fd.append('hint', $('imageHint').value.trim());
   try {
     const res = await api('POST', '/api/ai/parse-images', fd);
@@ -314,7 +313,6 @@ $('imageParseBtn').addEventListener('click', async () => {
     pendingImages = [];
     renderImages();
     $('imageHint').value = '';
-    await rememberAI({ provider: p.provider, model: p.model, api_key: p.api_key });
     toast(`识别出 ${recipients.length} 条收件人`, 'success', 5000);
   } catch (e) {
     toast(e.message, 'error', 9000);
@@ -322,50 +320,167 @@ $('imageParseBtn').addEventListener('click', async () => {
   btn.disabled = false; btn.textContent = '🤖 识别截图里的收件人';
 });
 
-// ── AI 配置 ──
-function fillAIProviders() {
-  const provs = config.ai_providers || [];
-  ['aiProvider2', 'aiProvider3'].forEach(id => {
-    const sel = $(id); if (!sel) return;
-    sel.innerHTML = '<option value="">— 选择 AI —</option>' +
-      provs.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
-    sel.addEventListener('change', () => {
-      const p = provs.find(x => x.name === sel.value);
-      const modelInput = id === 'aiProvider2' ? $('aiModel2') : $('aiModel3');
-      if (p && p.models.length) modelInput.value = p.models[0];
-    });
+// ── AI 设置 ──
+let aiState = { provider: "" };
+
+function aiConfigured() {
+  return !!(config.ai && config.ai.configured);
+}
+
+function renderAiStatus() {
+  const a = config.ai || {};
+  const line = aiConfigured()
+    ? `当前 AI：<strong>${esc(a.provider)} · ${esc(a.model)}</strong>`
+    : '还没配置 AI（只影响截图/文字提取，表格导入不需要它）';
+  ['aiStatusRecipients', 'aiStatusBody'].forEach(id => {
+    const el = $(id); if (!el) return;
+    el.innerHTML = line + ' · <a href="#" data-goto-ai>去 AI 设置</a>';
+  });
+  const el = $('aiStatus');
+  if (el) {
+    el.innerHTML = aiConfigured()
+      ? `✅ ${line}${a.api_key ? ' · Key 已保存' : ''}`
+      : '未配置。选一个提供商、粘贴 Key，点「测试连接」确认可用。';
+  }
+  document.querySelectorAll('[data-goto-ai]').forEach(link => {
+    link.addEventListener('click', e => { e.preventDefault(); switchTab('ai'); });
   });
 }
 
-function aiParams(n) {
+function renderProviderCards() {
+  const box = $('aiProviderCards');
+  if (!box) return;
+  box.innerHTML = (config.ai_providers || []).map(p => {
+    const active = p.name === aiState.provider ? 'active' : '';
+    const vision = (p.vision && p.vision.length)
+      ? '<span class="pv-tag">👁 看图</span>' : '';
+    return `<div class="provider-card ${active}" data-provider="${esc(p.name)}">
+      <div class="pv-name">${esc(p.name)}</div>${vision}</div>`;
+  }).join('');
+  box.querySelectorAll('[data-provider]').forEach(card => {
+    card.addEventListener('click', () => selectProvider(card.dataset.provider));
+  });
+}
+
+function selectProvider(name) {
+  aiState.provider = name;
+  const preset = (config.ai_providers || []).find(p => p.name === name) || {};
+  const models = preset.models || [];
+  const isCustom = name.indexOf('自定义') === 0;
+  const sel = $('aiModelSelect');
+  const custom = $('aiModelCustom');
+  sel.innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+  const manual = isCustom || !models.length;
+  sel.style.display = manual ? 'none' : 'block';
+  custom.style.display = manual ? 'block' : 'none';
+  $('aiBaseUrlGroup').style.display = isCustom ? 'block' : 'none';
+
+  const link = $('aiDocsLink');
+  if (preset.docs) { link.href = preset.docs; link.style.display = 'inline-block'; }
+  else { link.style.display = 'none'; }
+
+  $('aiVisionHint').textContent = (preset.vision && preset.vision.length)
+    ? `👁 图片识别用：${preset.vision.join(' / ')}` : '';
+  $('aiTestResult').style.display = 'none';
+  renderProviderCards();
+}
+
+function currentAiForm() {
+  const provider = aiState.provider;
+  const manual = $('aiModelSelect').style.display === 'none';
   return {
-    provider: $(`aiProvider${n}`).value,
-    model: $(`aiModel${n}`).value.trim(),
-    api_key: $(`aiKey${n}`).value.trim(),
+    provider,
+    model: manual ? $('aiModelCustom').value.trim() : $('aiModelSelect').value,
+    api_key: $('aiKeyInput').value.trim(),
+    base_url: provider.indexOf('自定义') === 0 ? $('aiBaseUrlInput').value.trim() : '',
   };
 }
 
-async function rememberAI(p) {
-  try { await api('POST', '/api/config/ai', p); config.ai = Object.assign({}, config.ai, p); } catch (e) {}
+function fillAiFormFromConfig() {
+  const a = config.ai || {};
+  renderProviderCards();
+  if (a.provider) {
+    selectProvider(a.provider);
+  } else {
+    aiState.provider = "";
+    renderProviderCards();
+  }
+  if (a.model) {
+    const sel = $('aiModelSelect');
+    const manual = sel.style.display === 'none';
+    if (manual) {
+      $('aiModelCustom').value = a.model;
+    } else {
+      // 存过但不在预设列表里的模型名，也要能显示出来
+      if (![...sel.options].some(o => o.value === a.model)) {
+        sel.insertAdjacentHTML('beforeend',
+          `<option value="${esc(a.model)}">${esc(a.model)}</option>`);
+      }
+      sel.value = a.model;
+    }
+  }
+  $('aiBaseUrlInput').value = a.base_url || '';
+  $('aiKeyInput').value = '';
+  $('aiKeyInput').placeholder = a.api_key ? '已保存（留空则沿用）' : '粘贴 API Key';
+  renderAiStatus();
 }
+
+$('saveAiBtn').addEventListener('click', async () => {
+  const f = currentAiForm();
+  if (!f.provider) { toast('先选一个提供商', 'error'); return; }
+  if (!f.model) { toast('模型不能为空', 'error'); return; }
+  if (f.provider.indexOf('自定义') === 0 && !f.base_url) { toast('自定义提供商要填 Base URL', 'error'); return; }
+  try {
+    await api('POST', '/api/config/ai', f);
+    config = await api('GET', '/api/config');
+    $('aiKeyInput').value = '';
+    $('aiKeyInput').placeholder = config.ai.api_key ? '已保存（留空则沿用）' : '粘贴 API Key';
+    renderAiStatus();
+    toast('AI 配置已保存', 'success');
+  } catch (e) { toast(e.message, 'error'); }
+});
+
+$('testAiBtn').addEventListener('click', async () => {
+  const f = currentAiForm();
+  if (!f.provider || !f.model) { toast('先选提供商和模型', 'error'); return; }
+  const btn = $('testAiBtn');
+  btn.disabled = true; btn.textContent = '测试中…';
+  const box = $('aiTestResult');
+  box.style.display = 'block'; box.className = 'test-result'; box.textContent = '正在让模型回一句话…';
+  try {
+    const r = await api('POST', '/api/ai/test', f);
+    box.className = 'test-result success';
+    box.textContent = `连接成功：${r.provider} · ${r.model}，${r.latency_ms} ms，模型回复「${r.reply}」`;
+    await api('POST', '/api/config/ai', f);
+    config = await api('GET', '/api/config');
+    $('aiKeyInput').value = '';
+    $('aiKeyInput').placeholder = '已保存（留空则沿用）';
+    renderAiStatus();
+  } catch (e) {
+    box.className = 'test-result error';
+    box.textContent = e.message;
+  }
+  btn.disabled = false; btn.textContent = '🔌 测试连接';
+});
 
 $('aiFillBtn').addEventListener('click', async () => {
   const input = $('aiInput').value.trim();
   if (!input) { toast('先粘贴公司信息', 'error'); return; }
   if (recipients.length && !confirm(`AI 提取会替换当前的 ${recipients.length} 条收件人，继续？`)) return;
-  const p = aiParams(2);
-  if (!p.provider || !p.model) { toast('选择 AI 提供商和模型', 'error'); return; }
+  if (!aiConfigured()) {
+    toast('先去「AI 设置」选提供商、粘贴 Key', 'error', 6000);
+    switchTab('ai'); return;
+  }
   const btn = $('aiFillBtn');
   btn.disabled = true; btn.textContent = 'AI 分析中…';
   try {
-    const res = await api('POST', '/api/ai/fill-template', Object.assign({ input }, p));
+    const res = await api('POST', '/api/ai/fill-template', { input });
     recipients = (res.recipients || []).map((r, i) => ({
       seq: i + 1, company: r.company, email: r.email,
       subject: r.subject || '', vars: r.vars || {},
     }));
     renderRecipients();
     showParseErrors([], res.recipients.length ? [] : ['AI 没有提取到收件人，检查一下输入内容']);
-    await rememberAI({ provider: p.provider, model: p.model, api_key: p.api_key });
     toast(`AI 提取了 ${recipients.length} 条`, 'success');
   } catch (e) { toast(e.message, 'error', 6000); }
   btn.disabled = false; btn.textContent = '🤖 AI 自动填充';
@@ -431,20 +546,22 @@ async function sendBodyChat() {
   const input = $('bodyChatInput');
   const msg = input.value.trim();
   if (!msg) return;
-  const p = aiParams(3);
-  if (!p.provider || !p.model) { toast('选择 AI 提供商和模型', 'error'); return; }
+  if (!aiConfigured()) {
+    toast('先去「AI 设置」选提供商、粘贴 Key', 'error', 6000);
+    switchTab('ai'); return;
+  }
   input.value = '';
   appendChatMsg(msg, 'user');
   bodyChatHistory.push({ role: 'user', content: msg });
   const loading = appendChatMsg('思考中…', 'assistant');
   try {
     const system = '你是求职邮件写作助手。输出可直接使用的纯文本正文，不要 Markdown，不要解释，保留 {姓名} {学校} {公司名} {岗位} 这类占位符。';
-    const res = await api('POST', '/api/ai/chat', Object.assign({
+    const res = await api('POST', '/api/ai/chat', {
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: `当前正文：\n${$('bodyEditor').value}` },
       ].concat(bodyChatHistory.slice(-8)),
-    }, p));
+    });
     loading.remove();
     bodyChatHistory.push({ role: 'assistant', content: res.content });
     appendChatMsg(res.content, 'assistant');
@@ -457,7 +574,6 @@ async function sendBodyChat() {
       toast('已填入编辑框，记得点「保存正文与主题」', 'success');
     });
     $('bodyChatMsgs').appendChild(useBtn);
-    await rememberAI({ provider: p.provider, model: p.model, api_key: p.api_key });
   } catch (e) {
     loading.remove();
     appendChatMsg('错误：' + e.message, 'error');
@@ -980,13 +1096,7 @@ async function init() {
     }
   });
 
-  fillAIProviders();
-  const a = config.ai || {};
-  ['aiProvider2', 'aiProvider3'].forEach(id => { if (a.provider) $(id).value = a.provider; });
-  ['aiModel2', 'aiModel3'].forEach(id => { if (a.model) $(id).value = a.model; });
-  ['aiKey2', 'aiKey3'].forEach(id => {
-    $(id).placeholder = a.api_key ? '已保存（留空则沿用）' : 'API Key';
-  });
+  fillAiFormFromConfig();
 
   const u = config.user || {};
   $('userName').value = u.name || '';

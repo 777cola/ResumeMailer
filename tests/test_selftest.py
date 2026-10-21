@@ -492,6 +492,36 @@ def test_scan_detects_reply_by_message_id():
     assert [r["email"] for r in out["replies"]] == ["hr@target.com"], out["replies"]
 
 
+def test_custom_provider_needs_base_url():
+    import engine.ai_filler as af
+    try:
+        af.ai_chat("自定义（OpenAI 兼容）", "k", "m", [{"role": "user", "content": "hi"}])
+    except ValueError as e:
+        assert "Base URL" in str(e), str(e)
+    else:
+        raise AssertionError("自定义提供商没填 Base URL 必须报错")
+
+
+def test_ai_test_returns_latency():
+    import engine.ai_filler as af
+
+    class Resp:
+        status_code = 200
+        def json(self):
+            return {"choices": [{"message": {"content": "ok"}}]}
+
+    captured = {}
+    orig = af.httpx.post
+    af.httpx.post = lambda url, headers=None, json=None, timeout=None: (
+        captured.update({"url": url}) or Resp())
+    try:
+        out = af.ai_test("DeepSeek", "k", "deepseek-chat")
+        assert out["reply"] == "ok" and out["latency_ms"] >= 0
+        assert captured["url"].endswith("/chat/completions"), captured["url"]
+    finally:
+        af.httpx.post = orig
+
+
 def test_vision_payload_openai_and_claude():
     """截图提取：两家 API 的消息结构必须各自正确（不联网）"""
     import json as _json
