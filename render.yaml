@@ -1,0 +1,26 @@
+# Render.com 一键部署配置
+# 访问 https://render.com → New Web Service → 连接 GitHub 仓库即可
+# 或者直接点击：
+# https://render.com/deploy?repo=https://github.com/777cola/ResumeMailer
+
+services:
+  - type: web
+    name: resumemailer
+    env: docker
+    repo: https://github.com/777cola/ResumeMailer
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 8765
+      - key: RESUMEMAILER_DATA
+        value: /data
+      # 公网部署务必取消注释并改成自己的口令，否则任何人都能访问你的配置与附件
+      # - key: RESUMEMAILER_TOKEN
+      #   value: change-me
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1

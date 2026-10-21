@@ -9,245 +9,155 @@
   </a>
 </p>
 
-> **Batch email sender for job seekers** — Send personalized application emails with a single click. Save as drafts or send directly. Optional AI-powered template filling.
+> **Batch email sender for job seekers** — one spreadsheet in, N personalized application emails out. Preview first, send one to yourself, then send or save as drafts.
 >
-> **求职者批量投递助手** — 一键批量发送个性化求职邮件。支持存草稿或直接发送，可选 AI 智能填充模板。
+> **求职者批量投递助手** — 一份 Excel 进，N 封个性化求职邮件出。先预览、先发给自己，再群发或存草稿。
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/dependencies-5-lightgrey" alt="Dependencies">
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome">
 </p>
 
 ---
 
-## ✨ Features / 功能
+## 它解决什么问题
 
-| English | 中文 |
-|---------|------|
-| 📧 **Email Sending** — Direct SMTP send or IMAP draft | 📧 **邮件发送** — SMTP 直接发送或 IMAP 存草稿 |
-| 👥 **Bulk Recipients** — Import from Excel template | 👥 **批量收件人** — 从 Excel 模板导入 |
-| 🤖 **AI Auto-Fill** — Let AI extract company info and generate subjects | 🤖 **AI 自动填充** — AI 提取公司信息并生成主题 |
-| ✍️ **Body Editor** — Template with `{公司名}` variable substitution | ✍️ **正文编辑** — 支持 `{公司名}` 变量替换的正文模板 |
-| 🤖 **AI Chat** — Chat with AI to customize your email body | 🤖 **AI 对话** — 与 AI 对话定制邮件正文 |
-| 📎 **Attachments** — Upload and manage attachments per batch | 📎 **附件管理** — 上传并管理附件 |
-| 🔒 **Local Only** — All data (keys, config) stored locally | 🔒 **本地安全** — 密钥、配置全部存储本地 |
-| 🚦 **Rate Control** — Smart throttling to avoid spam filters | 🚦 **频率控制** — 智能限速，避免触发反垃圾 |
-| 📋 **Send Logs** — Full history with retry for failures | 📋 **发送日志** — 完整历史记录，失败可重试 |
+投 80 家公司的现实做法是：把简历下载 80 次、复制粘贴 80 遍模板、忘记改公司名 3 次、被 QQ 邮箱限流 1 次。
+这个工具把这件事变成：填一张表 → 逐封预览 → 发给自己确认 → 一次发完，并且知道每封的成败。
 
-## 🚀 Quick Start / 快速开始
+不是邮件营销工具，没有订阅名单、没有打开率追踪，只做投递这一件事。
 
-### Prerequisites / 前置要求
+## ✨ 功能
 
-- Python 3.10+
-- A mailbox with SMTP/IMAP enabled + authorization code
-  - QQ邮箱: 设置 → 账户 → 生成授权码
-  - 163邮箱: 设置 → POP3/SMTP → 开启 + 设置授权码
-  - Gmail: App Passwords
+| 功能 | 说明 |
+|------|------|
+| 📄 **表格导入** | `.xlsx` / `.csv`，也可直接从 Excel 复制粘贴。列名支持「公司/单位/企业」「邮箱/邮件/email」等别名 |
+| 🧩 **任意列变变量** | 表格里加一列「岗位」，正文和主题就能写 `{岗位}`；一期一岗、一司一主题 |
+| 🧾 **主题也做替换** | `实习申请-{姓名}-{学校}-{岗位}` 按行渲染（很多同类工具只替换正文） |
+| 👁 **发送前预览** | 服务端渲染，所见即所发；正文/主题/收件人逐封对照 |
+| ✉️ **先发给自己** | 一键把第一封发到自己邮箱，确认排版和附件名 |
+| 📥 **存草稿 / 直发** | 存草稿可先在网页邮箱里逐封检查再点发送；直发有二次确认 |
+| 📊 **实时进度 + 停止** | 后台任务 + 轮询，50 封不卡页面，随时中止 |
+| 🚦 **限速与日上限** | 按分钟限速并带随机抖动；QQ 个人邮箱约 50 封/天，到顶自动停并说明原因 |
+| 🔁 **防重复投递** | 批内去重 + 对照历史记录提醒「这家你投过了」，可选择跳过 |
+| 📎 **附件正确编码** | 中文文件名（`戚俊皓-简历.pdf`）在 Outlook/Foxmail 里不乱码；超 25MB 提前拦下 |
+| 🧯 **失败可重跑** | 网络抖动自动重连重试；修好后重跑并勾选「跳过已投递」即只补发失败项 |
+| 📋 **投递记录导出** | 一键导出 Excel，用于跟进（谁投了、什么时候、成没成） |
+| 🔒 **纯本地** | 邮箱授权码、API Key 只写在本机 `~/.resumemailer/`，文件权限 600；不上传任何服务器 |
 
-### Install & Run / 安装运行
+## 🚀 快速开始
 
 ```bash
-# 1. Clone
 git clone https://github.com/777cola/ResumeMailer.git
 cd ResumeMailer
-
-# 2. Install dependencies
 pip install -r requirements.txt
-
-# 3. Run!
-python main.py
+python main.py          # → http://localhost:8765
 ```
 
-Then open your browser → **http://localhost:8765**
+需要 Python 3.10+，依赖只有 5 个（fastapi / uvicorn / openpyxl / httpx / python-multipart）。
 
-## ☁️ Cloud Deployment / 云端部署
+### 1. 邮箱配置
 
-### Option A: Render.com (一键部署, 免费)
+| 邮箱 | 授权码位置 | SMTP / IMAP | 每日参考上限 |
+|------|-----------|-------------|------------|
+| QQ 邮箱 | 设置 → 账户 → 生成授权码 | smtp.qq.com:465 / imap.qq.com:993 | 约 50 封 |
+| 163 / 126 | 设置 → POP3/SMTP/IMAP → 开启并设授权码 | smtp.163.com:465 / imap.163.com:993 | 约 100 封 |
+| Gmail | 账号 → 安全性 → 应用专用密码 | smtp.gmail.com:465 / imap.gmail.com:993 | 约 500 封 |
+| Outlook | 账户 → 安全 → 应用密码 | smtp.office365.com:587（STARTTLS） | 约 300 封 |
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/777cola/ResumeMailer)
+> 授权码不是登录密码。QQ/163 必须先开启 SMTP 服务，否则连不上。
 
-1. 点击上方按钮 → 登录 Render (GitHub OAuth)
-2. 选择 **Free** 计划
-3. 点击 **Deploy Web Service**
-4. 等待 2-3 分钟构建完成
-5. 访问 `https://resumemailer.onrender.com`
+### 2. 收件人
 
-> ⚠️ Render 免费实例 15 分钟无访问会休眠，再次访问会冷启动（约 30 秒）。
-> 如需持久运行，升级到 Starter 计划 ($7/月) 或使用 Docker 自部署。
+下载模板 → 填表 → 上传。模板里除四列核心字段外，多写的列都会成为变量：
 
-### Option B: Docker 自部署
+| 序号 | 公司名称 | 收件人邮箱 | 邮件主题 | 应聘岗位 | HR |
+|------|---------|-----------|---------|---------|-----|
+| 1 | 华泰资产 | hr@htasset.com | 实习申请-{姓名}-{应聘岗位} | 量化研究 | 王女士 |
 
+正文里就能写 `尊敬的{HR}：…… 应聘{应聘岗位}`。
+一个单元格写多个邮箱（逗号/分号/顿号分隔）会拆成多封**独立**邮件，两位 HR 不会互相看到地址。
+
+### 3. 正文与主题
+
+内置变量：`{公司名}` `{姓名}` `{学校}` `{专业}` `{年级}` `{电话}` `{邮箱}` `{技能}`，加上表格里自定义的任意列。
+可以用 AI 改写（DeepSeek / ChatGPT / Claude / GLM / MIMO / Kimi / 通义千问，任一 API Key）。
+
+### 4. 发送
+
+1. 点「先发给自己」，去收件箱确认排版、附件名、主题
+2. 回发送页看预检：未识别变量、空变量、重复投递、没有附件、超出日上限都会标出来
+3. 「全部存草稿」→ 去网页邮箱逐封检查后一起发；或「直接发送」→ 输入「确认发送」
+
+## 🧭 常见失败原因
+
+| 现象 | 原因 | 处理 |
+|------|------|------|
+| `535 Authentication failed` | 用了登录密码，或没开 SMTP 服务 | 生成授权码，确认设置里 SMTP 已开启 |
+| `Connection refused` / 超时 | 公司网络/代理挡了 465 端口 | 换网络，或改用 587 + STARTTLS |
+| 存草稿全失败 | 邮箱没开 IMAP，或草稿箱名特殊 | 程序会自动探测 Drafts/草稿箱/[Gmail]/Drafts；仍失败就改用直接发送 |
+| 后半段全失败 | 触发每日发信上限 | 设「每日上限」，第二天继续；QQ 个人邮箱约 50 封/天 |
+| 进了垃圾箱 | 新邮箱、短时间大量同文邮件 | 降速到 10 封/分、正文带姓名和岗位、别用群发式开头 |
+
+## ☁️ 部署
+
+### 本地（推荐）
+`python main.py`，只监听 `127.0.0.1`。邮箱授权码不出本机。
+
+### Docker
 ```bash
 docker build -t resumemailer .
-docker run -d -p 8765:8765 -v resumemailer-data:/data --name resumemailer resumemailer
+docker run -d -p 8765:8765 -v resumemailer-data:/data -e RESUMEMAILER_TOKEN=换成你的口令 --name resumemailer resumemailer
 ```
 
-支持在任何 Docker 主机上运行（VPS、NAS、云服务器等）。
-
-### Option C: Fly.io
-
-```bash
-# 安装 flyctl
-curl -L https://fly.io/install.sh | sh
-
-# 部署
-fly launch --image resumemailer --name resumemailer
-fly deploy
-fly volumes create data --size 1
-```
-
-### Option D: Railway
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/ResumeMailer)
-
-### 注意
+### Render / Fly.io / Railway
+仓库自带 `render.yaml`。**公网部署请务必设置 `RESUMEMAILER_TOKEN`**：
+不设的话任何人打开网址都能看到你的邮箱配置、附件列表，并用你的实例发信。设置后所有 API 需要口令，页面会提示输入一次并记住。
 
 | 平台 | 持久存储 | 费用 | 休眠 |
 |------|---------|------|------|
-| Render (Free) | ✅ 1GB 磁盘 | 免费 | 15分钟无访问休眠 |
-| Render (Starter) | ✅ 1GB+ | $7/月 | 不休眠 |
-| Fly.io | ✅ 3GB volume | 免费额度 | 不休眠 |
-| Railway | ✅ 1GB 磁盘 | $5 免费额度 | 不休眠 |
-| Docker (自部署) | ✅ 卷挂载 | 按VPS费用 | 可控 |
+| Render Free | ✅ 1GB | 免费 | 15 分钟无访问 |
+| Render Starter | ✅ | $7/月 | 不休眠 |
+| Docker 自部署 | ✅ 卷挂载 | VPS 费用 | 可控 |
 
-## 📖 User Guide / 使用指南
-
-### Step 1: Email Setup / 邮箱配置
-
-Select your email provider or enter SMTP/IMAP settings manually. Enter your authorization code and click "Test Connection" to verify.
-
-选择邮箱服务商或手动填写 SMTP/IMAP 配置。输入授权码后点击「测试连接」验证。
-
-### Step 2: Import Recipients / 导入收件人
-
-**Option A: Excel Template / 上传Excel模板**
-
-1. Download the template: click "⬇️ 下载 Excel 模板"
-2. Fill in: `No. | Company | Email | Subject`
-3. Upload the filled Excel
-
-| 序号 | 公司名称 | 收件人邮箱 | 邮件主题 |
-|------|---------|-----------|---------|
-| 1 | 示例公司 | hr@example.com | 实习申请-姓名-学校-专业 |
-
-**Option B: AI Auto-Fill / AI自动填充**
-
-1. Select an AI provider (DeepSeek/GLM/MIMO/ChatGPT/Claude)
-2. Enter API Key
-3. Paste company/position information
-4. Click "🤖 AI 自动填充"
-
-### Step 3: Email Body / 正文编辑
-
-Write your email body. Use `{公司名}` for automatic company name substitution.
-
-撰写邮件正文。使用 `{公司名}` 自动替换为收件公司名称。
-
-Use the AI chat window to generate or modify your email body with AI assistance.
-
-使用 AI 对话窗口辅助撰写或修改正文。
-
-### Step 4: Attachments / 附件
-
-Upload your resume, cover letter, or other attachments. All attachments are added to every outgoing email.
-
-上传简历、求职信等附件。所有附件将附加到每一封邮件。
-
-### Step 5: Preview & Send / 预览发送
-
-- **Preview** each email with ← → navigation
-- **Save as Draft** (IMAP) — stored in your mailbox drafts folder
-- ⚠️ **Direct Send** (SMTP) — requires triple confirmation
-
-- **逐封预览**：使用 ← → 翻页
-- **存草稿**（IMAP）：存入邮箱草稿箱，审核后再手动发
-- ⚠️ **直接发送**（SMTP）：三次确认后才放行，慎用！
-
-## 🧩 Project Structure / 项目结构
+## 🧱 项目结构
 
 ```
 resumemailer/
-├── main.py              # Entry point / 启动入口
-├── server.py            # FastAPI server with all routes / FastAPI 服务端
-├── config.py            # Config management (local JSON) / 配置管理
+├── main.py                 启动入口
+├── server.py               FastAPI 路由（配置 / 解析 / 预览 / 发送 / 日志 / 导出）
+├── config.py               配置与日志持久化（~/.resumemailer/）
 ├── engine/
-│   ├── excel_parser.py  # Excel template read/write/validate / Excel 模板读写校验
-│   ├── ai_filler.py     # AI API integration / AI API 集成
-│   └── sender.py        # SMTP + IMAP send engine / 发送引擎
-├── static/
-│   ├── index.html       # Web UI / 前端页面
-│   ├── style.css        # Styles / 样式
-│   └── app.js           # Frontend logic / 前端逻辑
-├── templates/           # Template files directory / 模板目录
-├── requirements.txt     # Dependencies / 依赖
-└── README.md            # This file
+│   ├── excel_parser.py     Excel/CSV 解析、别名识别、多邮箱拆分、去重
+│   ├── render.py           变量渲染（预览与发送共用同一套规则）
+│   ├── sender.py           SMTP 直发 / IMAP 存草稿、限速、重试、日上限
+│   ├── jobs.py             后台批次与进度
+│   └── ai_filler.py        AI 提取收件人 / 改写正文
+├── static/                 前端（原生 JS，无构建步骤）
+└── tests/test_selftest.py  离线自检：解析 / 渲染 / MIME / 限速 / 取消
 ```
 
-## 🔧 Configuration / 配置
-
-All configuration is stored in `~/.resumemailer/config.json`:
-- Email settings (SMTP/IMAP host, port, auth code)
-- AI provider (provider name, API key, model)
-- Body template
-- Send rate (default: 20 emails/minute)
-
-所有配置存储在 `~/.resumemailer/config.json`：
-- 邮箱设置（SMTP/IMAP 地址、端口、授权码）
-- AI 提供商（名称、API Key、模型）
-- 正文模板
-- 发送速度（默认 20 封/分钟）
-
-## 🤖 Supported AI Providers / 支持的 AI 提供商
-
-| Provider | Base URL | Default Models |
-|----------|----------|---------------|
-| DeepSeek | `https://api.deepseek.com/v1` | deepseek-chat, deepseek-reasoner |
-| GLM (智谱) | `https://open.bigmodel.cn/api/paas/v4` | glm-4-plus, glm-4-air-0111, glm-4-flash |
-| MIMO | `https://api.xiaomimimo.com/v1` | mimo-v2.5, mimo-v2.5-turbo, mimo-pro |
-| ChatGPT | `https://api.openai.com/v1` | gpt-4.1, gpt-4o, gpt-4o-mini, o3, o4-mini |
-| Claude | `https://api.anthropic.com/v1` | claude-sonnet-4, claude-4-opus, claude-haiku-3-5 |
-
-To add custom providers, edit `config.py` → `AI_PRESETS`.
-
-自定义提供商可修改 `config.py` 中的 `AI_PRESETS`。
-
-## 🔒 Security / 安全
-
-- **All credentials stored locally** — never transmitted to third parties
-- Auth codes and API keys stay on your machine
-- AI API calls only happen when you explicitly enable them
-- Open source — review the code yourself
-
-- **所有凭据仅在本地存储** — 绝不传输给第三方
-- 授权码和 API Key 仅保存在本机
-- AI API 调用仅在用户明确启用时触发
-- 代码完全开源透明
-
-## 🧪 Running Tests / 运行测试
-
+自检（不联网、不发信）：
 ```bash
-python -c "
-from engine.excel_parser import generate_template, parse_workbook
-tmpl = generate_template()
-result = parse_workbook(tmpl)
-print(f'Template test: {len(result.recipients)} recipients, {len(result.errors)} errors')
-"
+python tests/test_selftest.py     # 23/23 passed
 ```
 
-## 📝 License / 许可
+## ❓ FAQ
 
-MIT License. Free for personal and commercial use.
+**会泄露我的邮箱授权码吗？**
+不会。配置写在 `~/.resumemailer/config.json`（权限 600），只在本地进程使用。仅在你自己配置了 AI Key 并点击 AI 功能时，正文会发给对应 AI 厂商。
 
-MIT 许可证。免费用于个人和商业用途。
+**一次能发多少封？**
+取决于邮箱服务商，不是程序。表格超过 2000 行会被截断保护；单封附件上限 25MB。
 
-## 👤 Author
+**能带图片签名 / HTML 排版吗？**
+正文会自动生成 HTML 版（保留换行），比纯文本更不容易被判定为垃圾邮件。粘贴完整 HTML 也会原样发送。
 
-**AutumnPants** ([@777cola](https://github.com/777cola))
+**邮件发出去能撤回吗？**
+不能。所以有「先发给自己」和「存草稿」两条路。
 
----
+## 📄 License
 
-<p align="center">
-  <b>ResumeMailer</b> — Batch email sending made simple.<br>
-  <b>简历投递助手</b> — 让批量投递变得简单。
-</p>
+MIT © [AutumnPants](https://github.com/777cola)

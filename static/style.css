@@ -197,3 +197,29 @@ table tr:hover td { background: #f5f8fc; }
   .send-summary { gap: 12px; }
   .stat { flex: 1; min-width: 80px; }
 }
+
+/* ── v2: 预检 / 设置 / 可编辑表格 ── */
+.tip { color: var(--text-secondary); font-size: 12px; }
+.settings-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; background: #f8f9fb; border: 1px solid #e0e4e8; border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+.settings-row label { display: flex; align-items: center; gap: 6px; font-weight: 600; color: #444; }
+.settings-row input[type="number"] { width: 78px; padding: 4px 8px; }
+.checkbox-label { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer; font-size: 13px; }
+.checkbox-label input { width: auto; }
+.preflight { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.preflight:empty { display: none; }
+.pre-line { font-size: 13px; line-height: 1.55; padding: 7px 12px; border-radius: 6px; border-left: 3px solid transparent; }
+.pre-error { background: #fdecea; border-color: #b3261e; color: #8c1d18; }
+.pre-warn { background: #fff7e6; border-color: var(--accent); color: #8a4b00; }
+.pre-info { background: #eef3fa; border-color: var(--primary); color: var(--primary); }
+.preview-card { background: #fff; border: 1px solid #e8edf5; border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; }
+.preview-card:last-of-type { margin-bottom: 0; }
+.chip { display: inline-block; background: #eef3fa; color: var(--primary); border-radius: 4px; padding: 1px 6px; font-size: 11px; margin: 1px 2px; white-space: nowrap; }
+.chip-cell { max-width: 200px; }
+.cell-input { border: 1px solid transparent; background: transparent; padding: 4px 6px; font-size: 13px; border-radius: 4px; width: 100%; font-family: inherit; }
+.cell-input:hover { border-color: var(--border); background: #fff; }
+.cell-input:focus { border-color: var(--primary); background: #fff; box-shadow: none; }
+.btn-xs { padding: 4px 10px; font-size: 12px; }
+.progress-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
+.file-check { display: flex; align-items: center; gap: 8px; cursor: pointer; flex: 1; }
+.file-check input { width: 16px; height: 16px; }
+.warn-line { color: #8a4b00; }
