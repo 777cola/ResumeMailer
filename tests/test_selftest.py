@@ -382,7 +382,7 @@ def test_empty_attachment_list_does_not_fall_back():
         raise AssertionError("沿用的附件不存在时必须报错，而不是静默发一封没有附件的信")
 
 
-DSN_RAW = b"""From: Mail Delivery Subsystem <MAILER-DAEMON@qq.com>
+DSN_RAW = """From: Mail Delivery Subsystem <MAILER-DAEMON@qq.com>
 To: me@qq.com
 Subject: Undelivered Mail Returned to Sender
 Date: Wed, 21 Oct 2026 10:00:00 +0800
@@ -392,7 +392,7 @@ Content-Type: multipart/report; report-type=delivery-status; boundary="BOUND"
 --BOUND
 Content-Type: text/plain; charset=utf-8
 
-\u4f60\u7684\u90ae\u4ef6\u65e0\u6cd5\u6295\u9012\u3002
+你的邮件无法投递。
 --BOUND
 Content-Type: message/delivery-status
 
@@ -407,7 +407,7 @@ Content-Type: text/rfc822-headers
 
 Subject: test
 --BOUND--
-"""
+""".encode("utf-8")
 
 
 def _parse(raw):
@@ -433,7 +433,7 @@ def test_parse_bounce_text_fallback():
 Subject: 无法投递
 Content-Type: text/plain; charset=utf-8
 
-\u60a8\u7684\u90ae\u4ef6\u65e0\u6cd5\u6295\u9012\u5230 dead@nowhere.com\uff0c\u8bf7\u68c0\u67e5\u5730\u5740\u3002
+您的邮件无法投递到 dead@nowhere.com，请检查地址。
 """.encode("utf-8")
     rows = parse_bounce_message(_parse(raw), "me@163.com")
     assert [r["email"] for r in rows] == ["dead@nowhere.com"], rows
@@ -444,7 +444,7 @@ def test_scan_inbox_with_fake_conn():
     from config import EmailConfig
 
     headers = {
-        b"1": b"From: HR Wang <hr@good.com>\nSubject: \u9762\u8bd5\u9080\u8bf7\nDate: Wed, 21 Oct 2026 09:00:00 +0800\n\n",
+        b"1": b"From: HR Wang <hr@good.com>\nSubject: Interview invitation\nDate: Wed, 21 Oct 2026 09:00:00 +0800\n\n",
         b"2": DSN_RAW[:600],
         b"3": b"From: Newsletter <news@spam.com>\nSubject: weekly\n\n",
     }
@@ -592,6 +592,43 @@ def test_delivery_store_priority():
         assert "dead@x.com" not in d.dead_emails()
     finally:
         d.FILE = old
+
+
+def test_check_address():
+    from engine.sender import check_address
+    assert check_address("hr@company.com") == ""
+    assert check_address("hr@company.com.cn") == ""
+    assert check_address("") == "这一行没有邮箱"
+    assert "格式" in check_address("not-an-email")
+    assert "多个" in check_address("a@x.com,b@y.com")
+    assert "多个" in check_address("a@x.com；b@y.com")
+    assert "格式" in check_address("a@x")          # 没有顶级域
+    assert "只填邮箱" in check_address("张三 <a@x.com>")  # 带姓名没拆开
+
+
+def test_send_batch_rejects_bad_addresses():
+    """坏地址不能占额度、不能进 SMTP 循环"""
+    class FakeLink:
+        sent = []
+        def __init__(self, cfg): pass
+        def send(self, msg): FakeLink.sent.append(msg["To"])
+        def close(self): pass
+
+    from config import EmailConfig
+    orig = sender._SmtpLink
+    sender._SmtpLink = FakeLink
+    try:
+        recs = [{"company": "好", "email": "ok@x.com"},
+                {"company": "空", "email": ""},
+                {"company": "坏", "email": "not-an-email"},
+                {"company": "多", "email": "a@x.com,b@y.com"}]
+        out = sender.send_batch(EmailConfig(email="me@qq.com"), recs, "hi", "s", [],
+                                send_mode="send", rate=600)
+        got = [(r["status"], r["company"]) for r in out["results"]]
+        assert got == [("sent", "好"), ("failed", "空"), ("failed", "坏"), ("failed", "多")], got
+        assert FakeLink.sent == ["ok@x.com"], FakeLink.sent
+    finally:
+        sender._SmtpLink = orig
 
 
 def test_send_batch_skips_flagged_rows():

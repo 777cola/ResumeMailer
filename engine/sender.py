@@ -93,6 +93,23 @@ def _attachment_total_mb(paths: List[str]) -> float:
     return total / 1024 / 1024
 
 
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
+
+
+def check_address(raw) -> str:
+    """空字符串=没问题；否则返回一句人话原因。预览和发送都走这一处，避免两套规则。"""
+    addr = str(raw or "").strip()
+    if not addr:
+        return "这一行没有邮箱"
+    if any(c in addr for c in ",;，；、\t\r\n"):
+        return "一行里填了多个邮箱，请拆成多行（用 Excel 导入会自动拆分）"
+    if " " in addr:
+        return "只填邮箱地址，不要带姓名或空格（如「张三 <a@x.com>」）"
+    if not EMAIL_RE.match(addr):
+        return "邮箱格式不对"
+    return ""
+
+
 def build_message(cfg: EmailConfig, to_addr: str, subject: str, body: str, html: str,
                   attachments: List[str], cc_self: bool = False) -> EmailMessage:
     msg = EmailMessage()
@@ -397,8 +414,15 @@ def send_batch(
                       "error": r["skip_reason"]})
                 continue
 
+            problem = check_address(r.get("email", ""))
+            if problem:
+                emit({"company": r.get("company", ""), "email": str(r.get("email", "")),
+                      "subject": "", "success": False, "status": "failed",
+                      "error": problem})
+                continue
+
             rendered = render_email(r, user_info or {}, body, subject_template)
-            to_addr = r.get("email", "")
+            to_addr = str(r.get("email", "")).strip()
             result = {"company": r.get("company", ""), "email": to_addr,
                       "subject": rendered["subject"], "success": False,
                       "status": "failed", "error": ""}

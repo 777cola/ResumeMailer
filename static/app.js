@@ -702,6 +702,11 @@ function renderPreflight(p) {
   if (p.today.limit && p.total > remaining) {
     items.push(['error', `今日还可发 ${remaining} 封，本批 ${p.total} 封，超出部分会被跳过。`]);
   }
+  if (p.invalid_address_count) {
+    const names = (p.invalid_addresses || []).slice(0, 3)
+      .map(x => `${x.company || '—'}（${x.reason}）`).join('、');
+    items.push(['error', `${p.invalid_address_count} 行邮箱有问题，这些行不会发送：${names}${p.invalid_address_count > 3 ? '…' : ''}`]);
+  }
   if (p.dead_address_count) {
     const names = p.dead_addresses.slice(0, 3).map(x => x.company || x.email).join('、');
     items.push(['warn', `${p.dead_address_count} 个地址之前退信过（${names}${p.dead_address_count > 3 ? '…' : ''}），发送时会自动跳过。要强制重试，去「投递记录」勾选「忽略退信记录」。`]);
@@ -740,9 +745,10 @@ function renderPreflight(p) {
 
 function renderPreviewCards(p) {
   const cards = p.items.map(it => `
-    <div class="preview-card">
+    <div class="preview-card${it.error ? ' preview-bad' : ''}">
       <div class="preview-subject">📧 ${esc(it.subject || '(无主题)')}</div>
       <div class="preview-to">📩 ${esc(it.company || '—')} &lt;${esc(it.email)}&gt;</div>
+      ${it.error ? `<div class="preview-error">⚠️ 这行不会发出去：${esc(it.error)}</div>` : ''}
       <div class="preview-body">${esc(it.body)}</div>
     </div>`).join('');
   $('sendPreview').innerHTML = cards +

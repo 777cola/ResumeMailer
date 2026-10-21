@@ -255,4 +255,6 @@ table tr:hover td { background: #f5f8fc; }
 .plain-list { margin: 8px 0 8px 18px; font-size: 13px; color: #444; line-height: 1.8; }
 .plain-list code { background: #eef3fa; padding: 1px 5px; border-radius: 3px; font-size: 12px; color: var(--primary); }
 
+.preview-card.preview-bad { border-color: #e6b3ae; background: #fdf6f5; }
+.preview-error { font-size: 12px; color: #b3261e; margin: 4px 0 6px; }
 .ai-docs-link { align-self: center; font-size: 13px; color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }

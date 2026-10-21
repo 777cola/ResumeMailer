@@ -20,7 +20,7 @@ from config import (EMAIL_PRESETS, load_config, save_config, EmailConfig, ATTACH
 from engine.excel_parser import generate_template, parse_workbook, parse_tsv
 from engine.ai_filler import (ai_chat, ai_fill_template, ai_extract_images,
                              ai_generate_body, get_available_providers, ai_test)
-from engine.sender import test_connection, send_test
+from engine.sender import check_address, send_batch, send_test
 from engine.bounce import scan_inbox
 from engine import delivery
 from engine.render import (render_email, unknown_placeholders, collect_vars,
@@ -28,6 +28,15 @@ from engine.render import (render_email, unknown_placeholders, collect_vars,
 from engine import jobs
 
 app = FastAPI(title="ResumeMailer · 简历投递助手")
+
+
+@app.middleware("http")
+async def _no_stale_static(request: Request, call_next):
+    """升级后别让浏览器拿旧 JS/CSS——本地应用没有构建哈希，只能每次回源校验"""
+    resp = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -349,7 +358,12 @@ def preview(data: dict):
             "email": r.get("email", ""), "subject": rendered["subject"],
             "body": rendered["body"], "html": rendered["html"],
             "vars": r.get("vars") or {},
+            "error": check_address(r.get("email", "")),
         })
+
+    invalid = [{"company": r.get("company", ""), "email": r.get("email", ""),
+                "reason": check_address(r.get("email", ""))}
+               for r in recipients if check_address(r.get("email", ""))]
 
     unknown = set()
     empty = set()
@@ -393,6 +407,8 @@ def preview(data: dict):
         "already_contacted_count": len(contacted_hits),
         "dead_addresses": dead_hits[:50],
         "dead_address_count": len(dead_hits),
+        "invalid_addresses": invalid[:5],
+        "invalid_address_count": len(invalid),
         "variables": collect_vars(recipients),
         "today": {"sent": sent_today(), "limit": cfg.daily_limit},
         "attachments": [Path(p).name for p in (cfg.last_attachments or [])],
