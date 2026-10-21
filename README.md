@@ -9,9 +9,9 @@
   </a>
 </p>
 
-> **Batch email sender for job seekers** — one spreadsheet in, N personalized application emails out. Preview first, send one to yourself, then send or save as drafts.
+> **Batch email sender for job seekers** — give it a recipient list, a resume and a body template; it does the repetitive rest.
 >
-> **求职者批量投递助手** — 一份 Excel 进，N 封个性化求职邮件出。先预览、先发给自己，再群发或存草稿。
+> **求职者批量投递助手** — 准备一份收件人名单（表格、截图、聊天记录都行）、一份简历、一段正文，剩下的重复劳动交给它。
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-blue" alt="Python">

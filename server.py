@@ -10,7 +10,7 @@ import openpyxl
 import uvicorn
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -18,7 +18,8 @@ from config import (EMAIL_PRESETS, load_config, save_config, EmailConfig, ATTACH
                     LOG_FILE, sent_today, already_contacted, load_log,
                     DEFAULT_BODY_TEMPLATE, DEFAULT_SUBJECT_TEMPLATE)
 from engine.excel_parser import generate_template, parse_workbook, parse_tsv
-from engine.ai_filler import ai_chat, ai_fill_template, ai_generate_body, get_available_providers
+from engine.ai_filler import (ai_chat, ai_fill_template, ai_extract_images,
+                             ai_generate_body, get_available_providers)
 from engine.sender import test_connection, send_test
 from engine.bounce import scan_inbox
 from engine import delivery
@@ -90,7 +91,7 @@ def onboarding():
          "tab": "config", "detail": cfg.email.email or ""},
         {"key": "recipients", "title": "导入收件人",
          "done": bool(cfg.last_recipients),
-         "hint": "下载模板填好上传，或从 Excel 直接复制粘贴",
+         "hint": "表格、CSV、Excel 粘贴、截图都行；AI 会帮你提取公司/邮箱/岗位",
          "tab": "recipients",
          "detail": f"{len(cfg.last_recipients)} 位" if cfg.last_recipients else ""},
         {"key": "body", "title": "确认正文与主题",
@@ -435,6 +436,43 @@ def ai_fill(data: dict):
                 "subject": r.get("subject", ""),
                 "vars": r.get("vars") or {},
             })
+        if recipients:
+            _store_recipients(recipients)
+        return {"ok": True, "recipients": recipients,
+                "variables": collect_vars(recipients)}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
+
+
+@app.post("/api/ai/parse-images")
+async def ai_parse_images(files: list[UploadFile] = File(...),
+                          provider: str = Form(""), model: str = Form(""),
+                          api_key: str = Form(""), hint: str = Form("")):
+    """上传截图/照片，AI 提取公司、邮箱、岗位"""
+    cfg = load_config()
+    provider = provider or cfg.ai.provider
+    model = model or cfg.ai.model
+    key = api_key or cfg.ai.api_key
+    if not provider or not model or not key:
+        raise HTTPException(400, "先选一个支持看图的模型并填 API Key（GPT-4o / Claude / qwen-vl-max / glm-4v-plus）")
+
+    images = []
+    for f in files[:6]:
+        data = await f.read()
+        if len(data) > 8 * 1024 * 1024:
+            raise HTTPException(400, f"{f.filename} 超过 8MB，压缩后再传")
+        mime = (f.content_type or "").lower()
+        if not mime.startswith("image/"):
+            raise HTTPException(400, f"{f.filename} 不是图片")
+        images.append((data, mime))
+    if not images:
+        raise HTTPException(400, "没有收到图片")
+
+    try:
+        rows = ai_extract_images(provider, key, model, images, hint=hint.strip())
+        recipients = [{"seq": i + 1, "company": r.get("company", ""),
+                       "email": r.get("email", ""), "subject": r.get("subject", ""),
+                       "vars": r.get("vars") or {}} for i, r in enumerate(rows)]
         if recipients:
             _store_recipients(recipients)
         return {"ok": True, "recipients": recipients,

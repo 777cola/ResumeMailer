@@ -242,6 +242,86 @@ $('pasteParseBtn').addEventListener('click', async () => {
   } catch (e) { toast(e.message, 'error'); }
 });
 
+// ── 截图 / 图片导入 ──
+let pendingImages = [];
+
+const imageZone = $('imageUploadZone');
+imageZone.addEventListener('click', () => $('imageInput').click());
+imageZone.addEventListener('dragover', e => { e.preventDefault(); imageZone.classList.add('dragover'); });
+imageZone.addEventListener('dragleave', () => imageZone.classList.remove('dragover'));
+imageZone.addEventListener('drop', e => {
+  e.preventDefault(); imageZone.classList.remove('dragover');
+  addImages(e.dataTransfer.files);
+});
+$('imageInput').addEventListener('change', e => addImages(e.target.files));
+
+function addImages(fileList) {
+  for (const f of fileList || []) {
+    if (!f.type || !f.type.startsWith('image/')) continue;
+    if (f.size > 8 * 1024 * 1024) { toast(`${f.name} 超过 8MB，先压缩`, 'error'); continue; }
+    if (pendingImages.length >= 6) { toast('最多 6 张图，够用了', 'error'); break; }
+    pendingImages.push(f);
+  }
+  renderImages();
+}
+
+function renderImages() {
+  const box = $('imagePreview');
+  box.innerHTML = pendingImages.map((f, i) => `
+    <div class="image-thumb">
+      <img src="${URL.createObjectURL(f)}" alt="${esc(f.name)}">
+      <button class="thumb-del" data-delimg="${i}" title="移除">×</button>
+    </div>`).join('');
+  box.querySelectorAll('[data-delimg]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pendingImages.splice(+btn.dataset.delimg, 1);
+      renderImages();
+    });
+  });
+}
+
+// 在收件人页直接 ⌘V / Ctrl+V 粘贴截图
+document.addEventListener('paste', e => {
+  const panel = $('tab-recipients');
+  if (!panel || !panel.classList.contains('active')) return;
+  const files = Array.from((e.clipboardData && e.clipboardData.files) || [])
+    .filter(f => f.type && f.type.startsWith('image/'));
+  if (files.length) { e.preventDefault(); addImages(files); }
+});
+
+$('imageParseBtn').addEventListener('click', async () => {
+  if (!pendingImages.length) { toast('先拖一张截图进来', 'error'); return; }
+  const p = aiParams(2);
+  if (!p.provider || !p.model) { toast('先选一个会看图的模型', 'error'); return; }
+  if (recipients.length && !confirm(`识别结果会替换当前的 ${recipients.length} 条收件人，继续？`)) return;
+
+  const btn = $('imageParseBtn');
+  btn.disabled = true; btn.textContent = '识别中…（大图要十几秒）';
+  const fd = new FormData();
+  pendingImages.forEach(f => fd.append('files', f));
+  fd.append('provider', p.provider);
+  fd.append('model', p.model);
+  fd.append('api_key', p.api_key);
+  fd.append('hint', $('imageHint').value.trim());
+  try {
+    const res = await api('POST', '/api/ai/parse-images', fd);
+    recipients = (res.recipients || []).map((r, i) => ({
+      seq: i + 1, company: r.company || '', email: r.email || '',
+      subject: r.subject || '', vars: r.vars || {},
+    }));
+    renderRecipients();
+    showParseErrors([], res.recipients.length ? [] : ['图里没有识别到收件人，换一张清晰点的，或补一句说明']);
+    pendingImages = [];
+    renderImages();
+    $('imageHint').value = '';
+    await rememberAI({ provider: p.provider, model: p.model, api_key: p.api_key });
+    toast(`识别出 ${recipients.length} 条收件人`, 'success', 5000);
+  } catch (e) {
+    toast(e.message, 'error', 9000);
+  }
+  btn.disabled = false; btn.textContent = '🤖 识别截图里的收件人';
+});
+
 // ── AI 配置 ──
 function fillAIProviders() {
   const provs = config.ai_providers || [];

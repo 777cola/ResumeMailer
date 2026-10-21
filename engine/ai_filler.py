@@ -1,4 +1,5 @@
 """AI API 调用 — DeepSeek / GLM / MIMO / ChatGPT / Claude / Kimi / 通义"""
+import base64
 import json
 import re
 from typing import Optional
@@ -79,9 +80,7 @@ def _extract_json(content: str):
     raise ValueError(f"AI 返回的内容无法解析为 JSON：\n{text[:500]}")
 
 
-def ai_fill_template(provider: str, api_key: str, model: str, user_input: str) -> list:
-    """从粘贴的乱七八糟文本里提取收件人；额外字段（岗位/城市/HR）进 vars"""
-    system_prompt = """你是求职投递助手。从用户提供的文本中提取收件人信息，返回 JSON 数组。
+EXTRACT_SYSTEM = """你是求职投递助手。从用户提供的文本中提取收件人信息，返回 JSON 数组。
 每条记录：
 {"company": "公司名", "email": "邮箱", "subject": "邮件主题", "vars": {"岗位": "…", "HR": "…"}}
 规则：
@@ -91,11 +90,8 @@ def ai_fill_template(provider: str, api_key: str, model: str, user_input: str) -
 - vars 放其它有用的字段（岗位、城市、HR 姓名、渠道等），没有就省略
 只返回 JSON 数组，不要任何说明文字。"""
 
-    content = ai_chat(provider, api_key, model, [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"从下面内容中提取收件人：\n\n{user_input}"},
-    ])
-    data = _extract_json(content)
+
+def _normalize_rows(data) -> list:
     if isinstance(data, dict):
         data = [data]
     if not isinstance(data, list):
@@ -117,6 +113,61 @@ def ai_fill_template(provider: str, api_key: str, model: str, user_input: str) -
             "vars": {str(k): str(v) for k, v in vars_.items() if v},
         })
     return out
+
+
+def ai_fill_template(provider: str, api_key: str, model: str, user_input: str) -> list:
+    """从粘贴的乱七八糟文本里提取收件人；额外字段（岗位/城市/HR）进 vars"""
+    content = ai_chat(provider, api_key, model, [
+        {"role": "system", "content": EXTRACT_SYSTEM},
+        {"role": "user", "content": f"从下面内容中提取收件人：\n\n{user_input}"},
+    ])
+    return _normalize_rows(_extract_json(content))
+
+
+def ai_extract_images(provider: str, api_key: str, model: str,
+                      images: list, hint: str = "") -> list:
+    """从截图/照片里提取收件人。images: [(bytes, mime)]"""
+    if not images:
+        raise ValueError("没有图片")
+    preset = AI_PRESETS.get(provider)
+    if not preset:
+        raise ValueError(f"不支持的 AI 提供商: {provider}")
+    text = EXTRACT_SYSTEM + (f"\n补充说明：{hint}" if hint else "")
+
+    if provider == "Claude":
+        content = [{"type": "text", "text": text}]
+        for data, mime in images:
+            content.append({"type": "image",
+                            "source": {"type": "base64",
+                                       "media_type": mime or "image/png",
+                                       "data": base64.b64encode(data).decode()}})
+        resp = httpx.post("https://api.anthropic.com/v1/messages",
+                          headers={"x-api-key": api_key,
+                                   "anthropic-version": "2023-06-01",
+                                   "Content-Type": "application/json"},
+                          json={"model": model, "max_tokens": 4096,
+                                "messages": [{"role": "user", "content": content}]},
+                          timeout=180)
+        if resp.status_code >= 400:
+            raise RuntimeError(_friendly_http_error(resp))
+        raw = resp.json()["content"][0]["text"]
+    else:
+        content = [{"type": "text", "text": text}]
+        for data, mime in images:
+            content.append({"type": "image_url",
+                            "image_url": {"url": f"data:{mime or 'image/png'};base64,"
+                                                 f"{base64.b64encode(data).decode()}"}})
+        resp = httpx.post(f"{preset['base_url'].rstrip('/')}/chat/completions",
+                          headers={"Authorization": f"Bearer {api_key}",
+                                   "Content-Type": "application/json"},
+                          json={"model": model, "temperature": 0.2,
+                                "messages": [{"role": "user", "content": content}]},
+                          timeout=180)
+        if resp.status_code >= 400:
+            raise RuntimeError(_friendly_http_error(resp))
+        raw = resp.json()["choices"][0]["message"]["content"]
+
+    return _normalize_rows(_extract_json(raw))
 
 
 def ai_generate_body(provider: str, api_key: str, model: str, instruction: str,

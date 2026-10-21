@@ -492,6 +492,55 @@ def test_scan_detects_reply_by_message_id():
     assert [r["email"] for r in out["replies"]] == ["hr@target.com"], out["replies"]
 
 
+def test_vision_payload_openai_and_claude():
+    """截图提取：两家 API 的消息结构必须各自正确（不联网）"""
+    import json as _json
+    import engine.ai_filler as af
+
+    captured = {}
+
+    class Resp:
+        status_code = 200
+        def __init__(self, payload): self.payload = payload
+        def json(self): return self.payload
+
+    def fake_openai(url, headers=None, json=None, timeout=None):
+        captured["url"], captured["json"] = url, json
+        return Resp({"choices": [{"message": {"content":
+            '[{"company":"A","email":"a@a.com","vars":{"岗位":"量化"}}]'}}]})
+
+    def fake_claude(url, headers=None, json=None, timeout=None):
+        captured["url"], captured["json"] = url, json
+        return Resp({"content": [{"text": '[{"company":"B","email":"b@b.com"}]'}]})
+
+    orig = af.httpx.post
+    try:
+        af.httpx.post = fake_openai
+        rows = af.ai_extract_images("ChatGPT", "k", "gpt-4o", [(b"img", "image/png")], "只看邮箱")
+        assert rows[0]["company"] == "A" and rows[0]["vars"]["岗位"] == "量化"
+        parts = captured["json"]["messages"][0]["content"]
+        assert parts[1]["type"] == "image_url"
+        assert parts[1]["image_url"]["url"].startswith("data:image/png;base64,")
+        assert "只看邮箱" in captured["json"]["messages"][0]["content"][0]["text"]
+
+        af.httpx.post = fake_claude
+        rows = af.ai_extract_images("Claude", "k", "claude-sonnet-4", [(b"img", "image/jpeg")])
+        assert rows[0]["email"] == "b@b.com"
+        blocks = captured["json"]["messages"][0]["content"]
+        assert blocks[1]["type"] == "image"
+        assert blocks[1]["source"]["media_type"] == "image/jpeg"
+        assert captured["json"]["max_tokens"] == 4096
+    finally:
+        af.httpx.post = orig
+
+
+def test_normalize_rows_accepts_dict_and_list():
+    from engine.ai_filler import _normalize_rows
+    assert _normalize_rows({"company": "A", "email": "a@a.com"})[0]["company"] == "A"
+    rows = _normalize_rows([{"company": "B", "position": "行研"}])
+    assert rows[0]["vars"]["position"] == "行研"
+
+
 def test_delivery_store_priority():
     import tempfile
     import engine.delivery as d
