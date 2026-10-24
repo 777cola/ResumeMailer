@@ -347,3 +347,15 @@ table tr:hover td { background: #f5f8fc; }
   box-shadow: 0 4px 18px rgba(26, 75, 140, 0.07); display: block; }
 .mail-shot figcaption { margin-top: 8px; font-size: 12px; color: #8a99ab; }
 .preview-sub { margin: 8px 0 8px; font-size: 14px; color: #1c2b3a; }
+
+/* 先发第一封 */
+.first-batch { margin: 18px 0 4px; padding: 16px 18px; border-radius: 10px;
+  background: #f2f7ff; border: 1px solid #d8e6fb; }
+.fb-head { font-size: 14px; font-weight: 600; color: #1A4B8C; margin-bottom: 6px; }
+.fb-tip { font-size: 13px; color: #5b6b7c; line-height: 1.7; margin: 0 0 12px; }
+.fb-tip span { font-weight: 600; color: #1c2b3a; }
+.fb-actions { display: flex; gap: 10px; align-items: center; }
+.fb-state { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #1A4B8C; }
+.send-divider { display: flex; align-items: center; gap: 12px; margin: 22px 0 14px; }
+.send-divider::before, .send-divider::after { content: ""; flex: 1; height: 1px; background: #e8edf5; }
+.send-divider span { font-size: 12px; color: #9aa8b8; white-space: nowrap; }

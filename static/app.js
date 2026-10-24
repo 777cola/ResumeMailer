@@ -69,7 +69,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     $('tab-' + tab.dataset.tab).classList.add('active');
-    if (tab.dataset.tab === 'send') loadPreview();
+    if (tab.dataset.tab === 'send') { loadPreview(); refreshFirstBatch(); }
     if (tab.dataset.tab === 'attachments') loadMailPreview();
     if (tab.dataset.tab === 'logs') { loadLogs(); loadContacts(); }
     if (tab.dataset.tab === 'guide') loadGuide();
@@ -962,6 +962,52 @@ $('warningConfirm').addEventListener('click', () => {
   startSending('send');
 });
 
+// ── 先发第一封 ──
+function sentSetFromLogs(logs) {
+  return new Set((logs || [])
+    .filter(e => e.success && e.status === 'sent')
+    .map(e => String(e.email || '').toLowerCase()));
+}
+
+let firstBatchSent = 0;
+
+async function refreshFirstBatch() {
+  const box = $('firstBatchBox');
+  if (!box) return;
+  if (recipients.length < 2) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  let sent = 0;
+  try {
+    const logs = await api('GET', '/api/logs');
+    const done = sentSetFromLogs(Array.isArray(logs) ? logs : (logs.logs || []));
+    sent = recipients.filter(r => done.has(String(r.email).toLowerCase())).length;
+  } catch (e) { /* 读不到日志就按没发过处理 */ }
+  firstBatchSent = sent;
+  const rest = Math.max(0, recipients.length - sent);
+  $('firstSendBtn').style.display = sent ? 'none' : '';
+  $('restSendBtn').style.display = sent && rest ? '' : 'none';
+  $('restSendBtn').textContent = `发剩下 ${rest} 封`;
+  $('fbRest').textContent = sent ? rest : Math.max(0, recipients.length - 1);
+  $('firstBatchState').textContent = sent
+    ? `已发 ${sent} / ${recipients.length} 封 · 还剩 ${rest} 封`
+    : `共 ${recipients.length} 封 · 一封都还没发`;
+}
+
+$('firstSendBtn').addEventListener('click', () => {
+  if (!guardSend()) return;
+  const list = sendList();
+  if (!list.length) { toast('没有需要发的收件人', 'error'); return; }
+  startSending('send', { list, limit: 1, skipSent: true });
+});
+
+$('restSendBtn').addEventListener('click', () => {
+  if (!guardSend()) return;
+  const rest = Math.max(0, recipients.length - firstBatchSent);
+  if (!rest) { toast('没有需要发的收件人了', 'error'); return; }
+  if (!confirm(`发出剩下的 ${rest} 封？已经发过的会自动跳过。`)) return;
+  startSending('send', { limit: 0, skipSent: true });
+});
+
 function guardSend() {
   if (!recipients.length) { toast('收件人为空', 'error'); return false; }
   if (!config.email || !config.email.email) { toast('先配置邮箱', 'error'); return false; }
@@ -975,8 +1021,8 @@ function sendList() {
   return list;
 }
 
-async function startSending(mode) {
-  const list = sendList();
+async function startSending(mode, opts = {}) {
+  const list = opts.list || sendList();
   if (!list.length) { toast('没有需要发的收件人', 'error'); return; }
   $('draftBtn').disabled = true;
   $('sendBtn').disabled = true;
@@ -999,9 +1045,13 @@ async function startSending(mode) {
       daily_limit: parseInt($('dailyLimitInput').value) || 0,
       cc_self: $('ccSelf').checked,
       include_dead: !!($('includeDead') && $('includeDead').checked),
+      skip_sent: !!opts.skipSent,
+      limit: opts.limit || 0,
     });
     currentJob = res.job_id;
     if (res.dead_skipped) toast(`已自动跳过 ${res.dead_skipped} 个退信地址`, 'info', 6000);
+    if (res.already_sent) toast(`跳过 ${res.already_sent} 个已经发过的地址`, 'info', 5000);
+    if (opts.limit === 1) toast('这是第一封。发完去邮箱的「已发送」看一眼再发剩下的', 'info', 9000);
     $('cancelBtn').style.display = 'inline-block';
     $('progressText').textContent = `0 / ${res.total}`;
     pollJob();
@@ -1060,6 +1110,7 @@ $('cancelBtn').addEventListener('click', async () => {
 });
 
 function finishUI() {
+  refreshFirstBatch();
   $('draftBtn').disabled = false;
   $('sendBtn').disabled = false;
   $('testBtn').disabled = false;

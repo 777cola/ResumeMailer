@@ -765,6 +765,40 @@ def test_resume_fill_endpoint():
         server.ATTACH_DIR, server.ai_parse_resume = orig_dir, orig_ai
 
 
+def test_slice_batch_first_and_rest():
+    """先发第一封 / 发剩下：limit 截断，skip_sent 按成功记录跳过"""
+    import server
+    rows = [{"company": "A", "email": "a@x.com"}, {"company": "B", "email": "b@x.com"},
+            {"company": "C", "email": "c@x.com"}]
+    logs = [{"email": "A@X.com", "success": True, "status": "sent"},
+            {"email": "b@x.com", "success": False, "status": "failed"},
+            {"email": "c@x.com", "success": True, "status": "draft"}]
+
+    # 一封都没发：limit=1 只给第一封
+    got, skipped = server.slice_batch(rows, skip_sent=True, limit=1, logs=[])
+    assert [r["email"] for r in got] == ["a@x.com"], got
+    assert skipped == 0, skipped
+
+    # 已发过 a：limit=1 应该是“下一个没发过的”b，而不是重发 a
+    got, skipped = server.slice_batch(rows, skip_sent=True, limit=1, logs=logs)
+    assert [r["email"] for r in got] == ["b@x.com"], got
+    assert skipped == 1, skipped
+
+    # 发过 1 封（大小写不同也算）：剩下 2 封，草稿/失败的不算已发
+    got, skipped = server.slice_batch(rows, skip_sent=True, limit=0, logs=logs)
+    assert [r["email"] for r in got] == ["b@x.com", "c@x.com"], got
+    assert skipped == 1, skipped
+
+    # 全发过：空列表，调用方据此报错
+    got, skipped = server.slice_batch(rows, skip_sent=True, limit=0,
+                                      logs=[{"email": r["email"], "success": True, "status": "sent"} for r in rows])
+    assert got == [] and skipped == 3, (got, skipped)
+
+    # 不跳过时 limit=1 就是原样第一封
+    got, skipped = server.slice_batch(rows, skip_sent=False, limit=1, logs=logs)
+    assert len(got) == 1 and skipped == 0
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     failed = 0

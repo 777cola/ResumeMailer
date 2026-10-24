@@ -765,6 +765,26 @@ def send_to_self(data: dict):
     return {"ok": True, "msg": f"已发送到 {addr}，请到收件箱确认排版与附件名"}
 
 
+def slice_batch(recipients, skip_sent=False, limit=0, logs=None):
+    """先发第一封 / 只发一部分：返回 (本次要发的列表, 因为已发过而跳过的数量)
+
+    skip_sent 只认日志里 success 且 status=sent 的记录；存过草稿的不算已发（草稿另发会重复，
+    但那是用户自己的选择，这里不替他判断）。
+    """
+    out = list(recipients or [])
+    sent_before = 0
+    if skip_sent:
+        src = load_log() if logs is None else logs
+        done = {str(e.get("email", "")).lower() for e in src
+                if e.get("success") and e.get("status") == "sent"}
+        keep = [r for r in out if str(r.get("email", "")).lower() not in done]
+        sent_before = len(out) - len(keep)
+        out = keep
+    if limit and limit > 0:
+        out = out[:limit]
+    return out, sent_before
+
+
 @app.post("/api/send/start")
 def send_start(data: dict):
     cfg = load_config()
@@ -774,6 +794,13 @@ def send_start(data: dict):
         raise HTTPException(400, "收件人列表为空")
     if len(recipients) > 2000:
         raise HTTPException(400, "单批最多 2000 封，请拆分发送")
+    full_recipients = list(recipients)   # 用户完整名单；limit / skip_sent 只影响本次任务
+
+    # 先发第一封 / 只发一部分：limit 截断，skip_sent 跳过已成功投递过的地址
+    limit = max(0, int(data.get("limit") or 0))
+    recipients, sent_before = slice_batch(recipients, bool(data.get("skip_sent")), limit)
+    if not recipients:
+        raise HTTPException(400, "这批收件人已经全部发过了")
 
     mode = data.get("send_mode", "draft")
     if mode not in ("draft", "send", "dry"):
@@ -801,7 +828,7 @@ def send_start(data: dict):
             dead_skipped += 1
         job_recipients.append(item)
 
-    cfg.last_recipients = recipients      # 原样保存，不把 skip_reason 写进配置
+    cfg.last_recipients = full_recipients  # 原样保存，不把 skip_reason 写进配置
     cfg.last_attachments = attachments
     cfg.body_template = body
     cfg.subject_template = subject
@@ -817,7 +844,7 @@ def send_start(data: dict):
     except RuntimeError as e:
         raise HTTPException(409, str(e))
     return {"ok": True, "job_id": job_id, "total": len(recipients),
-            "dead_skipped": dead_skipped,
+            "dead_skipped": dead_skipped, "already_sent": sent_before, "limit": limit,
             "skipped_by_limit": max(0, len(recipients) - max(0, daily_limit - sent_today())) if daily_limit else 0}
 
 

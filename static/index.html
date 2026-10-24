@@ -377,6 +377,19 @@
         <div id="preflight" class="preflight"></div>
         <div id="sendPreview" class="preview-area"></div>
 
+        <div class="first-batch" id="firstBatchBox" style="display:none;">
+          <div class="fb-head">分两步发，别一次全发出去</div>
+          <p class="fb-state" id="firstBatchState">还没发过第一封</p>
+          <p class="fb-tip">先只发 1 封，到上面那个发件邮箱的「已发送」里看一眼：主题、正文、附件都对，
+            再发剩下的 <span id="fbRest">0</span> 封。</p>
+          <div class="fb-actions">
+            <button class="btn btn-primary" id="firstSendBtn">发第 1 封给收件人</button>
+            <button class="btn btn-primary" id="restSendBtn" style="display:none;">发剩下 0 封</button>
+          </div>
+        </div>
+
+        <div class="send-divider"><span>其他发送方式</span></div>
+
         <div class="send-actions">
           <button class="btn btn-secondary" id="testBtn">先发给自己</button>
           <button class="btn btn-warning" id="draftBtn">全部存草稿</button>
