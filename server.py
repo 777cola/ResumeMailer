@@ -43,14 +43,32 @@ async def _no_stale_static(request: Request, call_next):
         resp.headers["Cache-Control"] = "no-cache"
     return resp
 
-STATIC_DIR = Path(__file__).parent / "static"
+def _resource_dir() -> Path:
+    """static/ prompts/ VERSION 所在目录。
+
+    源码运行＝项目根；PyInstaller 打包后模块可能来自 base_library.zip，
+    __file__ 不可靠，优先用 _MEIPASS（macOS 在 Contents/Frameworks，Windows 在 _internal）。
+    """
+    import sys
+    for cand in (Path(__file__).resolve().parent,
+                 Path(getattr(sys, "_MEIPASS", "") or "."),
+                 Path(sys.executable).resolve().parent / "_internal"):
+        if (cand / "static").is_dir():
+            return cand
+    return Path(__file__).resolve().parent
+
+
+BASE_DIR = _resource_dir()
+STATIC_DIR = BASE_DIR / "static"
 
 
 def _app_version() -> str:
-    try:
-        return (Path(__file__).parent / "VERSION").read_text(encoding="utf-8").strip()
-    except OSError:
-        return "dev"
+    for cand in (BASE_DIR / "VERSION", Path(__file__).resolve().parent / "VERSION"):
+        try:
+            return cand.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+    return "dev"
 
 
 APP_VERSION = _app_version()
@@ -692,10 +710,38 @@ def list_attachments():
     return {"files": files}
 
 
+_ILLEGAL_NAME_CHARS = '<>:"/\\|?*'
+_WIN_RESERVED = ({"CON", "PRN", "AUX", "NUL"}
+                 | {f"COM{i}" for i in range(1, 10)}
+                 | {f"LPT{i}" for i in range(1, 10)})
+
+
+def safe_filename(name: str, fallback: str = "attachment") -> str:
+    r"""把上传的名字变成 macOS / Windows 都能落盘的文件名。
+
+    Windows 不允许 < > : " / \ | ? * 和控制字符，CON/PRN/NUL/COM1 这类设备名会直接失败；
+    整条路径还有 260 字符限制，所以顺手截断。正常的中文简历名不受影响。
+    """
+    raw = str(name or "").replace("\\", "/")
+    base = Path(raw).name
+    cleaned = "".join("_" if (ch in _ILLEGAL_NAME_CHARS or ord(ch) < 32) else ch
+                      for ch in base).strip(" .")
+    if not cleaned:
+        return fallback
+    if "." in cleaned:
+        stem, _, ext = cleaned.rpartition(".")
+    else:
+        stem, ext = cleaned, ""
+    if stem.upper() in _WIN_RESERVED:
+        stem = f"_{stem}"
+    stem, ext = stem[:80], ext[:16]
+    return f"{stem}.{ext}" if ext else stem
+
+
 @app.post("/api/attachments/upload")
 async def upload_attachment(file: UploadFile = File(...)):
     ATTACH_DIR.mkdir(parents=True, exist_ok=True)
-    name = Path(file.filename or "attachment").name
+    name = safe_filename(file.filename)
     save_path = ATTACH_DIR / name
     if save_path.exists():
         save_path = ATTACH_DIR / f"{save_path.stem}_{datetime.now():%H%M%S}{save_path.suffix}"
@@ -714,9 +760,12 @@ async def upload_attachment(file: UploadFile = File(...)):
 
 @app.delete("/api/attachments/{filename}")
 def delete_attachment(filename: str):
-    filepath = ATTACH_DIR / Path(filename).name
+    filepath = ATTACH_DIR / safe_filename(filename)
     if filepath.is_file():
-        filepath.unlink()
+        try:
+            filepath.unlink()
+        except PermissionError:      # Windows：文件正被 Excel / 预览占用
+            raise HTTPException(400, "这个文件正被其他程序打开，关掉它再删")
         cfg = load_config()
         cfg.last_attachments = [p for p in cfg.last_attachments if Path(p).name != filepath.name]
         save_config(cfg)

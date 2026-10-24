@@ -818,6 +818,20 @@ def test_recent_logs_window():
     assert "bad@x.com" in got, got          # 解析不了就保留，不静默丢数据
 
 
+def test_safe_filename_cross_platform():
+    """附件名要能落到 Windows 上：非法字符、设备名、反斜杠路径、超长名"""
+    import server
+    assert server.safe_filename("简历:2026*.pdf") == "简历_2026_.pdf"
+    assert server.safe_filename("CON.pdf") == "_CON.pdf"
+    assert server.safe_filename(r"C:\Users\me\cv.docx") == "cv.docx"
+    assert server.safe_filename("   ") == "attachment"
+    assert server.safe_filename("") == "attachment"
+    long_name = server.safe_filename("长" * 200 + ".pdf")
+    assert len(long_name) <= 90 and long_name.endswith(".pdf")
+    # 正常中文名必须原样保留
+    assert server.safe_filename("戚俊皓-华东理工大学-本科-金融.pdf") == "戚俊皓-华东理工大学-本科-金融.pdf"
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     failed = 0

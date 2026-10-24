@@ -29,11 +29,21 @@ def _healthy(port: int) -> bool:
         return False
 
 
+def _port_busy(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.25)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
 def _free_port(start: int, span: int = 12) -> int:
-    """端口被占（多半是已经开了一个）就往后找，别让用户面对一个闪退的图标"""
+    """端口被占（多半是已经开了一个）就往后找，别让用户面对一个闪退的图标。
+
+    不设 SO_REUSEADDR：Windows 上它允许两个进程绑同一个端口，等于没检查。
+    """
     for port in range(start, start + span):
+        if _port_busy(port):
+            continue
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 s.bind(("127.0.0.1", port))
                 return port
@@ -84,7 +94,10 @@ def main() -> int:
         print(f"ResumeMailer 已启动 → {url}")
         if port != requested:
             print(f"（{requested} 被占用，换到了 {port}）")
-        print("数据保存在 ~/.resumemailer ；退出请关掉这个窗口，或在 Dock 上按 Cmd+Q。")
+        if sys.platform == "win32":
+            print(f"数据保存在 {os.path.expanduser('~')}\\.resumemailer ；要退出就关掉这个窗口。")
+        else:
+            print("数据保存在 ~/.resumemailer ；退出请关掉这个窗口，或在 Dock 上按 Cmd+Q。")
 
     uvicorn.run(app, host=os.environ["HOST"], port=port, log_level="warning")
     return 0
