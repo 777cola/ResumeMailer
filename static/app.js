@@ -1196,7 +1196,7 @@ async function loadContacts() {
       <td><span class="status-dot ${esc(c.status || 'sent')}"></span>${label}</td>
       <td style="color:${color}">${esc(c.detail || '—')}</td></tr>`;
   }).join('');
-  tbody.innerHTML = rows || '<tr><td colspan="5" class="tip">还没有投递记录</td></tr>';
+  tbody.innerHTML = rows || '<tr><td colspan="5" class="tip">最近 30 天没有投递记录</td></tr>';
 
   $('scanInfo').textContent = data.last_scan
     ? `上次检查：${fmtTime(data.last_scan)}（只读最近 14 天邮件，不会改成已读）`

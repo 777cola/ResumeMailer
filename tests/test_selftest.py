@@ -799,6 +799,25 @@ def test_slice_batch_first_and_rest():
     assert len(got) == 1 and skipped == 0
 
 
+def test_recent_logs_window():
+    """投递记录只取最近 30 天；时间解析不了的保留，31 天前的丢掉"""
+    import server
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    logs = [
+        {"email": "now@x.com", "time": now.isoformat(timespec="seconds"), "success": True, "status": "sent"},
+        {"email": "edge@x.com", "time": (now - timedelta(days=29, hours=23)).isoformat(timespec="seconds"),
+         "success": True, "status": "sent"},
+        {"email": "old@x.com", "time": (now - timedelta(days=31)).isoformat(timespec="seconds"),
+         "success": True, "status": "sent"},
+        {"email": "bad@x.com", "time": "not-a-date", "success": True, "status": "sent"},
+    ]
+    got = [e["email"] for e in server.recent_logs(logs=logs)]
+    assert "now@x.com" in got and "edge@x.com" in got, got
+    assert "old@x.com" not in got, got
+    assert "bad@x.com" in got, got          # 解析不了就保留，不静默丢数据
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     failed = 0

@@ -5,7 +5,7 @@ import os
 import re
 import tempfile
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
@@ -765,6 +765,26 @@ def send_to_self(data: dict):
     return {"ok": True, "msg": f"已发送到 {addr}，请到收件箱确认排版与附件名"}
 
 
+RECENT_DAYS = 30
+
+
+def recent_logs(days=RECENT_DAYS, logs=None):
+    """只取最近 N 天的记录。时间解析不了的条目保留，宁可多显示不可丢。"""
+    src = load_log() if logs is None else logs
+    cutoff = datetime.now() - timedelta(days=days)
+    out = []
+    for e in src:
+        raw = str(e.get("time", "") or "").strip()
+        try:
+            when = datetime.fromisoformat(raw.replace("Z", ""))
+        except ValueError:
+            out.append(e)
+            continue
+        if when >= cutoff:
+            out.append(e)
+    return out
+
+
 def slice_batch(recipients, skip_sent=False, limit=0, logs=None):
     """先发第一封 / 只发一部分：返回 (本次要发的列表, 因为已发过而跳过的数量)
 
@@ -866,8 +886,8 @@ def send_cancel(job_id: str):
 
 @app.get("/api/logs")
 def get_logs():
-    logs = load_log()
-    return {"logs": logs[-300:]}
+    logs = recent_logs()
+    return {"logs": logs[-300:], "days": RECENT_DAYS, "total": len(logs)}
 
 
 @app.delete("/api/logs")
@@ -879,11 +899,13 @@ def clear_logs():
 
 @app.get("/api/contacts")
 def contacts():
-    view = delivery.contacts_view(load_log())
+    rows = recent_logs()
+    view = delivery.contacts_view(rows)
     counts = {"sent": 0, "replied": 0, "bounced": 0}
     for row in view:
         counts[row["status"]] = counts.get(row["status"], 0) + 1
-    return {"contacts": view[:500], "counts": counts, "last_scan": delivery.last_scan()}
+    return {"contacts": view[:500], "counts": counts, "last_scan": delivery.last_scan(),
+            "days": RECENT_DAYS, "log_total": len(rows)}
 
 
 @app.post("/api/inbox/scan")
@@ -913,10 +935,10 @@ def inbox_scan(data: dict = None):
 
 @app.get("/api/report/export")
 def export_report():
-    logs = load_log()
+    logs = recent_logs()
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "投递记录"
+    ws.title = f"投递记录（最近{RECENT_DAYS}天）"
     headers = ["时间", "公司", "收件人邮箱", "邮件主题", "方式", "结果", "备注"]
     ws.append(headers)
     widths = [20, 28, 34, 44, 10, 8, 40]
@@ -936,7 +958,7 @@ def export_report():
     ws.freeze_panes = "A2"
     buf = io.BytesIO()
     wb.save(buf)
-    fname = quote(f"ResumeMailer投递记录-{date.today():%Y%m%d}.xlsx")
+    fname = quote(f"ResumeMailer投递记录-最近{RECENT_DAYS}天-{date.today():%Y%m%d}.xlsx")
     return Response(
         content=buf.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
