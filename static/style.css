@@ -359,3 +359,17 @@ table tr:hover td { background: #f5f8fc; }
 .send-divider { display: flex; align-items: center; gap: 12px; margin: 22px 0 14px; }
 .send-divider::before, .send-divider::after { content: ""; flex: 1; height: 1px; background: #e8edf5; }
 .send-divider span { font-size: 12px; color: #9aa8b8; white-space: nowrap; }
+
+/* 上手页：AI 能力对照 */
+.ai-matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+@media (max-width: 860px) { .ai-matrix { grid-template-columns: 1fr; } }
+.ai-col { border: 1px solid #e8edf5; border-radius: 10px; padding: 16px 18px; background: #fcfdff;
+  display: flex; flex-direction: column; }
+.ai-col.has-ai { background: #f4f8ff; border-color: #d8e6fb; }
+.ai-col-head { font-size: 13px; font-weight: 600; color: #1c2b3a; margin-bottom: 10px; }
+.ai-col.has-ai .ai-col-head { color: #1A4B8C; }
+.ai-col ul { margin: 0; padding-left: 18px; }
+.ai-col li { font-size: 13px; line-height: 1.9; color: #41505f; }
+.ai-col code { background: #eef3fa; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+.ai-note { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid #eaeff7;
+  font-size: 12px; line-height: 1.7; color: #8a99ab; margin-top: auto; }

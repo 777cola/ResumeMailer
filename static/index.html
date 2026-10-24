@@ -41,6 +41,34 @@
       </div>
 
       <div class="card">
+        <h3>哪些地方要用 AI，哪些不用</h3>
+        <p class="desc" style="margin-top:0;">不接 AI 也能走完整条链路；接上 AI 只是少打几段字。两列都看完再决定要不要配 Key。</p>
+        <div class="ai-matrix">
+          <div class="ai-col no-ai">
+            <div class="ai-col-head">不接 AI 也能做完</div>
+            <ul>
+              <li>配发件邮箱（QQ / 163 / Gmail 授权码）</li>
+              <li>收件人：下载 Excel 模板填好传回来，或直接粘贴表格</li>
+              <li>上传简历与附件，勾选随信发出的文件</li>
+              <li>写一次正文模板，<code>{姓名}</code> <code>{公司名}</code> <code>{岗位}</code> 逐封替换</li>
+              <li>预检 → 先发给自己 → 先发第一封 → 发剩下 / 全部存草稿</li>
+              <li>检查退信与回复、投递记录（最近 30 天）、导出 Excel</li>
+            </ul>
+            <p class="ai-note">从配邮箱到发完、再看结果，整条链路都不经过任何模型。不填 Key 也能装好就用。</p>
+          </div>
+          <div class="ai-col has-ai">
+            <div class="ai-col-head">接上 AI 多出来的三件事</div>
+            <ul>
+              <li>收件人「AI 输入」：招聘群截图、岗位 PDF、HR 发来的 Word、学校汇总表 → 自动认出公司 / 邮箱 / 岗位</li>
+              <li>正文「从简历自动填写」：读附件里那份简历，把姓名、学校、专业、年级、电话、邮箱填好</li>
+              <li>正文右下角的 AI 对话：「改短一点」「突出量化经历」，改完点「使用此正文」才生效</li>
+            </ul>
+            <p class="ai-note">AI 只负责「读材料」和「写文案」。发信、附件、退信检查全都不经过模型；Key 只存在本机，正文改不改由你点。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
         <h3>容易踩的坑</h3>
         <details class="faq"><summary>授权码在哪里？和登录密码一样吗？</summary>
           <p>不一样，必须用授权码。QQ 邮箱：设置 → 账户 → 开启 SMTP → 生成授权码；163/126：设置 → POP3/SMTP/IMAP → 开启并设置授权码；Gmail：账号 → 安全性 → 应用专用密码；Outlook：账户 → 安全 → 应用密码。</p></details>
