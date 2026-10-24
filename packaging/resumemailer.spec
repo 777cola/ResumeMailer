@@ -24,6 +24,7 @@ for pkg in ("uvicorn", "fastapi", "starlette", "engine"):
     hiddenimports += collect_submodules(pkg)
 
 datas = [(os.path.join(ROOT, "static"), "static"),
+         (os.path.join(ROOT, "prompts"), "prompts"),
          (os.path.join(ROOT, "VERSION"), ".")]
 try:
     datas += collect_data_files("certifi")

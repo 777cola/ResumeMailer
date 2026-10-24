@@ -1,7 +1,10 @@
 """ResumeMailer FastAPI 服务端"""
+import base64
 import io
 import os
 import re
+import tempfile
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -18,7 +21,9 @@ from config import (EMAIL_PRESETS, load_config, save_config, EmailConfig, ATTACH
                     LOG_FILE, sent_today, already_contacted, load_log,
                     DEFAULT_BODY_TEMPLATE, DEFAULT_SUBJECT_TEMPLATE)
 from engine.excel_parser import generate_template, parse_workbook, parse_tsv
+from engine.file_reader import file_kind, mime_of, read_text
 from engine.ai_filler import (ai_chat, ai_fill_template, ai_extract_images,
+                             ai_extract_files, ai_parse_resume, load_soul,
                              ai_generate_body, get_available_providers, ai_test)
 from engine.sender import check_address, send_batch, send_test
 from engine.bounce import scan_inbox
@@ -110,18 +115,18 @@ def onboarding():
          "tab": "config", "detail": cfg.email.email or ""},
         {"key": "recipients", "title": "导入收件人",
          "done": bool(cfg.last_recipients),
-         "hint": "表格、CSV、Excel 粘贴、截图都行；AI 会帮你提取公司/邮箱/岗位",
+         "hint": "下载 Excel 模板填好传回来，或者把截图、PDF、Word 丢给 AI 提取",
          "tab": "recipients",
          "detail": f"{len(cfg.last_recipients)} 位" if cfg.last_recipients else ""},
+        {"key": "attachment", "title": "上传简历附件",
+         "done": bool(attachments),
+         "hint": "中文文件名不会乱码；配了 AI 还能从简历自动填个人信息",
+         "tab": "attachments",
+         "detail": f"{len(attachments)} 个文件" if attachments else ""},
         {"key": "body", "title": "确认正文与主题",
          "done": bool((cfg.body_template or "").strip() and (cfg.subject_template or "").strip()),
          "hint": "变量写成 {姓名} {公司名} {岗位}，发送时逐封替换",
          "tab": "body", "detail": ""},
-        {"key": "attachment", "title": "上传简历附件",
-         "done": bool(attachments),
-         "hint": "中文文件名也不会乱码；别忘了在发送页勾选",
-         "tab": "attachments",
-         "detail": f"{len(attachments)} 个文件" if attachments else ""},
         {"key": "test", "title": "先发给自己",
          "done": bool(cfg.last_test_at),
          "hint": "确认排版、附件名、主题都对，再群发",
@@ -435,7 +440,7 @@ def _ai_params(data: dict):
     key = data.get("api_key") or cfg.ai.api_key
     base_url = data.get("base_url") or cfg.ai.base_url
     if not provider or not key or not model:
-        raise HTTPException(400, "还没配 AI：去「AI 设置」选一个提供商、粘贴 Key 就能用")
+        raise HTTPException(400, "还没配 AI：在「收件人 → AI 输入」里选一个提供商、粘贴 Key 就能用")
     if provider == "自定义（OpenAI 兼容）" and not base_url:
         raise HTTPException(400, "自定义提供商需要填 Base URL（形如 https://xxx/v1）")
     return provider, key, model, base_url
@@ -495,6 +500,116 @@ def ai_fill(data: dict):
                 "variables": collect_vars(recipients)}
     except Exception as e:
         return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
+
+
+@app.post("/api/ai/parse-files")
+async def ai_parse_files(files: list[UploadFile] = File(...),
+                         provider: str = Form(""), model: str = Form(""),
+                         api_key: str = Form(""), hint: str = Form("")):
+    """任何格式的材料（截图/PDF/Word/Excel/文本）→ 收件人名单"""
+    cfg = load_config()
+    provider = provider or cfg.ai.provider
+    model = model or cfg.ai.model
+    key = api_key or cfg.ai.api_key
+    base_url = cfg.ai.base_url
+    if not provider or not model or not key:
+        raise HTTPException(400, "先在这个页面的「1. 接上 AI」里选一个提供商、粘贴 API Key")
+
+    blocks, used, skipped = [], [], []
+    for f in files[:6]:
+        name = Path(f.filename or "材料").name
+        data = await f.read()
+        if len(data) > 12 * 1024 * 1024:
+            skipped.append(f"{name} 超过 12MB")
+            continue
+        kind = file_kind(Path(name))
+        if kind == "image":
+            mime = (f.content_type or "").lower()
+            if not mime.startswith("image/"):
+                mime = mime_of(Path(name))
+            blocks.append({"kind": "image", "name": name,
+                           "data_url": f"data:{mime};base64,{base64.b64encode(data).decode()}"})
+            used.append(f"{name}（图片）")
+            continue
+        # 非图片：落到临时文件再按后缀读，避免把路径当输入
+        tmp = Path(tempfile.gettempdir()) / f"rm_{uuid.uuid4().hex}{Path(name).suffix.lower()}"
+        tmp.write_bytes(data)
+        try:
+            text = read_text(tmp)
+        except ValueError as e:
+            skipped.append(str(e))
+            continue
+        finally:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+        if not text.strip():
+            skipped.append(f"{name} 里没有可读文字（扫描件请先导出成 PDF/Word，或截图给我看）")
+            continue
+        blocks.append({"kind": "text", "name": name, "text": text})
+        used.append(f"{name}（{len(text)} 字）")
+
+    if not blocks:
+        raise HTTPException(400, "这些文件里没有可以读的内容：" + "；".join(skipped or ["未知格式"]))
+
+    try:
+        rows = ai_extract_files(provider, key, model, blocks, hint=hint.strip(), base_url=base_url)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
+
+    recipients = [{"seq": i + 1, "company": r.get("company", ""),
+                   "email": r.get("email", ""), "subject": r.get("subject", ""),
+                   "vars": r.get("vars") or {}, "note": r.get("note", "")}
+                  for i, r in enumerate(rows)]
+    return {"ok": True, "recipients": recipients, "total": len(recipients),
+            "files_used": used, "files_skipped": skipped,
+            "model": f"{provider} · {model}"}
+
+
+@app.post("/api/ai/resume-fill")
+def ai_resume_fill(data: dict):
+    """读一份简历附件，抽出个人信息填正文"""
+    cfg = load_config()
+    provider = data.get("provider") or cfg.ai.provider
+    model = data.get("model") or cfg.ai.model
+    key = data.get("api_key") or cfg.ai.api_key
+    base_url = data.get("base_url") or cfg.ai.base_url
+    if not provider or not model or not key:
+        raise HTTPException(400, "还没配 AI：在「收件人 → AI 输入」里选提供商、粘贴 Key 后就能自动读简历")
+
+    path = data.get("filename") or ""
+    if not path:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "先选一份简历附件"})
+    try:
+        safe = _safe_attachment(path)
+        text = read_text(Path(safe))
+    except HTTPException:
+        raise
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
+
+    if not text.strip():
+        return JSONResponse(status_code=400,
+                            content={"ok": False, "error": "这份文件读不出文字（扫描版简历请导出成 PDF/Word）"})
+    try:
+        fields = ai_parse_resume(provider, key, model, text, base_url=base_url)
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
+    return {"ok": True, "fields": fields, "filename": Path(safe).name}
+
+
+@app.get("/api/ai/soul")
+def ai_soul(name: str = "recipient"):
+    """把 AI 的角色设定原文给界面看，用户知道它按什么规则在干活"""
+    if name not in ("recipient", "resume", "body"):
+        raise HTTPException(400, "未知的 soul")
+    text = load_soul(name)
+    if not text:
+        raise HTTPException(404, "没有找到 soul 文件")
+    return {"ok": True, "name": name, "content": text}
 
 
 @app.post("/api/ai/parse-images")

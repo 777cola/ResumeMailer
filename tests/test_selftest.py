@@ -659,6 +659,112 @@ def test_send_batch_skips_flagged_rows():
         sender._SmtpLink = orig
 
 
+# ── 文件读取 / SOUL / 新端点 ──
+
+def _docx_bytes(text):
+    """手搓一个最小 docx（zip + word/document.xml），避免测试依赖 python-docx"""
+    import zipfile
+    buf = io.BytesIO()
+    paras = "".join(f"<w:p><w:r><w:t>{line}</w:t></w:r></w:p>" for line in text.split("\n"))
+    xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+           '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+           f"<w:body>{paras}</w:body></w:document>")
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", xml)
+    return buf.getvalue()
+
+
+def test_file_reader_docx_xlsx_txt():
+    import tempfile
+    from engine.file_reader import read_text, file_kind
+
+    tmp = Path(tempfile.mkdtemp())
+    docx = tmp / "招聘.docx"
+    docx.write_bytes(_docx_bytes("华泰证券招聘\n简历发 hr@htsc.com"))
+    assert file_kind(docx) == "docx"
+    got = read_text(docx)
+    assert "华泰证券" in got and "hr@htsc.com" in got, got
+
+    xlsx = tmp / "名单.xlsx"
+    xlsx.write_bytes(_xlsx([["公司", "邮箱"], ["中信", "hr@citics.com"]]))
+    sheet = read_text(xlsx)
+    assert "中信" in sheet and "hr@citics.com" in sheet, sheet
+
+    gbk = tmp / "旧编码.txt"
+    gbk.write_bytes("公司：国泰君安 hr@gtja.com".encode("gb18030"))
+    assert "国泰君安" in read_text(gbk), "GBK 文本应能读出来"
+
+    img = tmp / "截图.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\n")
+    assert file_kind(img) == "image" and read_text(img) == ""
+
+
+def test_soul_prompts_exist():
+    from engine.ai_filler import load_soul
+    recipient = load_soul("recipient")
+    assert "JSON" in recipient and "宁可漏" in recipient, "收件人 soul 应含关键约束"
+    assert "company" in recipient and "email" in recipient
+    resume = load_soul("resume")
+    assert "姓名" in resume and "学校" in resume
+
+
+def test_parse_files_endpoint_plumbing():
+    from fastapi.testclient import TestClient
+    import server
+
+    orig = server.ai_extract_files
+    server.ai_extract_files = lambda *a, **k: [
+        {"company": "华泰证券", "email": "hr@htsc.com", "subject": "",
+         "vars": {"岗位": "量化"}, "note": ""}
+    ]
+    try:
+        client = TestClient(server.app)
+        r = client.post("/api/ai/parse-files",
+                        files=[("files", ("招聘.txt", "华泰证券 hr@htsc.com".encode(), "text/plain"))],
+                        data={"provider": "DeepSeek", "model": "deepseek-flash", "api_key": "k"})
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["recipients"][0]["email"] == "hr@htsc.com"
+        assert d["files_used"] and "招聘.txt" in d["files_used"][0]
+
+        # 空文件也要给出人话错误
+        empty = client.post("/api/ai/parse-files",
+                            files=[("files", ("空白.docx", _docx_bytes(""), "application/octet-stream"))],
+                            data={"provider": "DeepSeek", "model": "m", "api_key": "k"})
+        assert empty.status_code == 400, empty.text
+    finally:
+        server.ai_extract_files = orig
+
+
+def test_resume_fill_endpoint():
+    import tempfile
+    from fastapi.testclient import TestClient
+    import server
+
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "简历.txt").write_text("张三 华东理工大学 金融学 27届", encoding="utf-8")
+    orig_dir, orig_ai = server.ATTACH_DIR, server.ai_parse_resume
+    server.ATTACH_DIR = tmp
+    server.ai_parse_resume = lambda *a, **k: {
+        "姓名": "张三", "学校": "华东理工大学", "专业": "金融学",
+        "年级": "27届", "电话": "", "邮箱": "", "note": "",
+    }
+    try:
+        client = TestClient(server.app)
+        ok = client.post("/api/ai/resume-fill", json={
+            "filename": str(tmp / "简历.txt"), "provider": "DeepSeek",
+            "model": "m", "api_key": "k"})
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["fields"]["学校"] == "华东理工大学"
+
+        # 目录外的路径必须拒绝
+        bad = client.post("/api/ai/resume-fill", json={
+            "filename": "/etc/passwd", "provider": "DeepSeek", "model": "m", "api_key": "k"})
+        assert bad.status_code == 400, bad.text
+    finally:
+        server.ATTACH_DIR, server.ai_parse_resume = orig_dir, orig_ai
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     failed = 0

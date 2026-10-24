@@ -3,6 +3,7 @@ import base64
 import json
 import re
 import time
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -193,12 +194,15 @@ def ai_generate_body(provider: str, api_key: str, model: str, instruction: str,
     """改写/生成求职邮件正文。带上当前正文和个人信息，避免模型瞎编"""
     user = user or {}
     facts = "、".join(f"{k}：{v}" for k, v in user.items() if v) or "（用户未填写）"
-    system_prompt = f"""你是求职邮件写作助手，帮中国学生写中文投递邮件正文。
-要求：
-- 直接输出可用的正文纯文本，不要 Markdown、不要解释、不要"以下是"之类的前缀
-- 保留 {{姓名}} {{学校}} {{公司名}} {{岗位}} 这类占位符，程序会按每家公司替换
-- 语气专业、简短，控制在 250 字以内，不要空话套话
-- 用户信息：{facts}"""
+    system_prompt = load_soul("body", "你是求职邮件写作助手，帮中国学生写中文投递邮件正文。")
+    system_prompt += f"""
+
+## 本次可用的用户信息
+{facts}
+
+## 输出
+直接输出正文纯文本。保留 {{姓名}} {{学校}} {{公司名}} {{岗位}} 这类占位符，程序会按每家公司替换。"""
+
     messages = [{"role": "system", "content": system_prompt}]
     if current_body.strip():
         messages.append({"role": "user", "content": f"当前正文：\n{current_body}"})
@@ -212,3 +216,117 @@ def get_available_providers() -> list:
     return [{"name": name, "models": info["models"], "base_url": info["base_url"],
              "docs": info.get("docs", ""), "vision": info.get("vision", [])}
             for name, info in AI_PRESETS.items()]
+
+
+# ── SOUL：AI 的角色设定（prompts/*.md，用户可在仓库里直接改） ──
+
+def _base_dir() -> Path:
+    """源码运行取项目根；PyInstaller 打包后取 _MEIPASS（prompts 在那里）"""
+    import sys
+    meipass = getattr(sys, "_MEIPASS", "")
+    return Path(meipass) if meipass else Path(__file__).resolve().parent.parent
+
+
+SOUL_DIR = _base_dir() / "prompts"
+
+
+def load_soul(name: str, fallback: str = "") -> str:
+    """读取 prompts/<name>_soul.md；打包后从 _MEIPASS/prompts 读"""
+    path = SOUL_DIR / f"{name}_soul.md"
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return fallback
+
+
+def ai_extract_files(provider: str, api_key: str, model: str, blocks: list,
+                     hint: str = "", base_url: str = "") -> list:
+    """从任意材料里提取收件人。
+
+    blocks: [{"kind": "text", "name": "招聘.pdf", "text": "..."},
+             {"kind": "image", "name": "截图.png", "data_url": "data:image/png;base64,..."}]
+    """
+    if not blocks:
+        raise ValueError("没有可读取的内容")
+    if provider not in AI_PRESETS:
+        raise ValueError(f"不支持的 AI 提供商: {provider}")
+
+    system = load_soul("recipient", EXTRACT_SYSTEM)
+    if hint.strip():
+        system += f"\n\n## 本次材料的补充说明\n{hint.strip()}"
+
+    text_parts = []
+    images = []
+    for b in blocks:
+        if b.get("kind") == "image":
+            images.append(b)
+        else:
+            body = (b.get("text") or "").strip()
+            if body:
+                text_parts.append(f"【文件：{b.get('name', '材料')}】\n{body}")
+    if not text_parts and not images:
+        raise ValueError("这些文件里没有可读的文字或图片")
+
+    lead = "下面是用户提供的材料，请按你的规则提取收件人。"
+    user_text = lead + ("\n\n" + "\n\n".join(text_parts) if text_parts else "")
+
+    if provider == "Claude":
+        content = [{"type": "text", "text": user_text}]
+        for img in images:
+            data_url = img.get("data_url", "")
+            mime = data_url.split(";")[0].replace("data:", "") or "image/png"
+            b64 = data_url.split(",", 1)[-1]
+            content.append({"type": "image",
+                            "source": {"type": "base64", "media_type": mime, "data": b64}})
+        resp = httpx.post("https://api.anthropic.com/v1/messages",
+                          headers={"x-api-key": api_key,
+                                   "anthropic-version": "2023-06-01",
+                                   "Content-Type": "application/json"},
+                          json={"model": model, "max_tokens": 8192,
+                                "system": system,
+                                "messages": [{"role": "user", "content": content}]},
+                          timeout=240)
+        if resp.status_code >= 400:
+            raise RuntimeError(_friendly_http_error(resp))
+        raw = resp.json()["content"][0]["text"]
+    else:
+        base = ai_base_url(provider, base_url)
+        if not base:
+            raise ValueError("「自定义」需要填写 Base URL（形如 https://xxx/v1）")
+        content = [{"type": "text", "text": user_text}]
+        for img in images:
+            content.append({"type": "image_url", "image_url": {"url": img.get("data_url", "")}})
+        resp = httpx.post(f"{base}/chat/completions",
+                          headers={"Authorization": f"Bearer {api_key}",
+                                   "Content-Type": "application/json"},
+                          json={"model": model, "temperature": 0.1, "max_tokens": 8192,
+                                "messages": [{"role": "system", "content": system},
+                                             {"role": "user", "content": content}]},
+                          timeout=240)
+        if resp.status_code >= 400:
+            raise RuntimeError(_friendly_http_error(resp))
+        raw = resp.json()["choices"][0]["message"]["content"]
+
+    return _normalize_rows(_extract_json(raw))
+
+
+def ai_parse_resume(provider: str, api_key: str, model: str, text: str,
+                    base_url: str = "") -> dict:
+    """从简历文本里读 姓名/学校/专业/年级/电话/邮箱"""
+    if not (text or "").strip():
+        raise ValueError("这份文件里没有可读文字（可能是扫描件，先导出成 PDF 或 Word）")
+    system = load_soul("resume", "你是简历读取员，只输出 JSON：{\"姓名\":\"\",\"学校\":\"\",\"专业\":\"\",\"年级\":\"\",\"电话\":\"\",\"邮箱\":\"\"}")
+    content = ai_chat(provider, api_key, model, [
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"简历正文：\n\n{text[:30000]}"},
+    ], base_url=base_url, timeout=180)
+    data = _extract_json(content)
+    if isinstance(data, list):
+        data = data[0] if data else {}
+    if not isinstance(data, dict):
+        raise ValueError("AI 没有返回对象")
+    out = {}
+    for key in ("姓名", "学校", "专业", "年级", "电话", "邮箱"):
+        out[key] = str(data.get(key, "") or "").strip()
+    out["note"] = str(data.get("note", "") or "").strip()
+    return out

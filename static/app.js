@@ -27,7 +27,8 @@ function toast(msg, type = 'info', ms = 3200) {
 }
 
 function fmtSize(n) {
-  if (!n) return '';
+  if (!n) return '0 B';
+  if (n < 1024) return n + ' B';
   return n > 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB';
 }
 
@@ -69,22 +70,33 @@ document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.add('active');
     $('tab-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'send') loadPreview();
+    if (tab.dataset.tab === 'attachments') loadMailPreview();
     if (tab.dataset.tab === 'logs') { loadLogs(); loadContacts(); }
     if (tab.dataset.tab === 'guide') loadGuide();
   });
 });
 
-document.querySelectorAll('.sub-tabs').forEach(group => {
-  group.addEventListener('click', e => {
-    const btn = e.target.closest('.sub-tab');
-    if (!btn) return;
-    group.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-    btn.classList.add('active');
-    const section = btn.closest('.tab-content');
-    section.querySelectorAll('.method-panel').forEach(p => p.classList.remove('active'));
-    $('method-' + btn.dataset.method).classList.add('active');
+function openEntry(name) {
+  document.querySelectorAll('.entry-card').forEach(c => {
+    c.classList.toggle('active', c.dataset.entry === name);
   });
+  document.querySelectorAll('.entry-panel').forEach(p => p.classList.remove('active'));
+  const panel = $('entry-' + name);
+  if (panel) panel.classList.add('active');
+  if (name === 'ai') loadSoul();
+}
+
+document.querySelectorAll('.entry-card').forEach(card => {
+  card.addEventListener('click', () => openEntry(card.dataset.entry));
 });
+
+// 从别处跳过来配 AI
+function openAiEntry() {
+  switchTab('recipients');
+  openEntry('ai');
+  const box = $('aiProviderCards');
+  if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
 
 // ── 邮箱配置 ──
 let PRESETS = {};
@@ -219,8 +231,7 @@ function splitEmailCell(raw) {
     .filter(Boolean);
 }
 
-function applyRecipients(rows, opts) {
-  const options = opts || {};
+function applyRecipients(rows) {
   // 一格多邮箱 → 拆成多行，别让两个 HR 出现在同一个 To 里
   const incoming = [];
   (rows || []).forEach(r => {
@@ -232,36 +243,26 @@ function applyRecipients(rows, opts) {
       });
     });
   });
-  const append = $('appendMode') && $('appendMode').checked && recipients.length > 0;
-  if (!append) {
-    if (options.confirmReplace && recipients.length) {
-      const ok = confirm(`会用新导入的 ${incoming.length} 条替换当前的 ${recipients.length} 条。`
-        + '\n要保留原名单，先勾选上面的「追加到现有名单」。继续替换？');
-      if (!ok) return null;
-    }
-    recipients = incoming;
-    return incoming.length;
-  }
+
+  // 永远按邮箱合并：已有的不动，新邮箱追加
   const seen = new Set(recipients.map(r => (r.email || '').toLowerCase()).filter(Boolean));
-  let added = 0;
+  let added = 0, dup = 0;
   for (const r of incoming) {
     const key = (r.email || '').toLowerCase();
-    if (key && seen.has(key)) continue;
+    if (key && seen.has(key)) { dup += 1; continue; }
     seen.add(key);
     recipients.push(Object.assign({}, r, { seq: recipients.length + 1 }));
     added += 1;
   }
-  return added;
+  return { added, dup };
 }
 
 function applyParsed(res) {
-  const added = applyRecipients(res.recipients, { confirmReplace: true });
-  if (added === null) return;
+  const { added, dup } = applyRecipients(res.recipients);
   renderRecipients();
   showParseErrors(res.errors, res.warnings);
-  toast($('appendMode').checked
-    ? `新增 ${added} 条，当前共 ${recipients.length} 条`
-    : `已加载 ${recipients.length} 位收件人`, 'success');
+  toast(`新增 ${added} 条${dup ? `，${dup} 条已存在跳过` : ''}，当前共 ${recipients.length} 条`,
+    added ? 'success' : 'info', 4200);
 }
 
 const excelZone = $('excelUploadZone');
@@ -294,82 +295,100 @@ $('pasteParseBtn').addEventListener('click', async () => {
   } catch (e) { toast(e.message, 'error'); }
 });
 
-// ── 截图 / 图片导入 ──
-let pendingImages = [];
+// ── AI 输入：任意文件（截图 / PDF / Word / Excel / 文本）→ 收件人 ──
+let pendingFiles = [];
 
-const imageZone = $('imageUploadZone');
-imageZone.addEventListener('click', () => $('imageInput').click());
-imageZone.addEventListener('dragover', e => { e.preventDefault(); imageZone.classList.add('dragover'); });
-imageZone.addEventListener('dragleave', () => imageZone.classList.remove('dragover'));
-imageZone.addEventListener('drop', e => {
-  e.preventDefault(); imageZone.classList.remove('dragover');
-  addImages(e.dataTransfer.files);
-});
-$('imageInput').addEventListener('change', e => addImages(e.target.files));
-
-function addImages(fileList) {
-  for (const f of fileList || []) {
-    if (!f.type || !f.type.startsWith('image/')) continue;
-    if (f.size > 8 * 1024 * 1024) { toast(`${f.name} 超过 8MB，先压缩`, 'error'); continue; }
-    if (pendingImages.length >= 6) { toast('最多 6 张图，够用了', 'error'); break; }
-    pendingImages.push(f);
-  }
-  renderImages();
+const aiZone = $('aiUploadZone');
+if (aiZone) {
+  aiZone.addEventListener('click', () => $('aiFileInput').click());
+  aiZone.addEventListener('dragover', e => { e.preventDefault(); aiZone.classList.add('dragover'); });
+  aiZone.addEventListener('dragleave', () => aiZone.classList.remove('dragover'));
+  aiZone.addEventListener('drop', e => {
+    e.preventDefault(); aiZone.classList.remove('dragover');
+    addFiles(e.dataTransfer.files);
+  });
+  $('aiFileInput').addEventListener('change', e => addFiles(e.target.files));
 }
 
-function renderImages() {
-  const box = $('imagePreview');
-  box.innerHTML = pendingImages.map((f, i) => `
-    <div class="image-thumb">
-      <img src="${URL.createObjectURL(f)}" alt="${esc(f.name)}">
-      <button class="thumb-del" data-delimg="${i}" title="移除">×</button>
+function addFiles(list) {
+  for (const f of list || []) {
+    if (f.size > 12 * 1024 * 1024) { toast(`${f.name} 超过 12MB，压缩或截半再传`, 'error'); continue; }
+    if (pendingFiles.length >= 6) { toast('一次最多 6 个文件，分批也行', 'error'); break; }
+    if (pendingFiles.some(x => x.name === f.name && x.size === f.size)) continue;
+    pendingFiles.push(f);
+  }
+  renderFileList();
+}
+
+function renderFileList() {
+  const box = $('aiFileList');
+  if (!box) return;
+  box.innerHTML = pendingFiles.map((f, i) => `
+    <div class="file-item">
+      <span class="file-name">${esc(f.name)}</span>
+      <span class="tip">${fmtSize(f.size)}</span>
+      <span class="file-del" data-delfile="${i}">移除</span>
     </div>`).join('');
-  box.querySelectorAll('[data-delimg]').forEach(btn => {
+  box.querySelectorAll('[data-delfile]').forEach(btn => {
     btn.addEventListener('click', () => {
-      pendingImages.splice(+btn.dataset.delimg, 1);
-      renderImages();
+      pendingFiles.splice(+btn.dataset.delfile, 1);
+      renderFileList();
     });
   });
 }
 
-// 在收件人页直接 ⌘V / Ctrl+V 粘贴截图
+// 收件人页 ⌘V / Ctrl+V 直接粘截图
 document.addEventListener('paste', e => {
   const panel = $('tab-recipients');
   if (!panel || !panel.classList.contains('active')) return;
+  if (!$('entry-ai').classList.contains('active')) return;
   const files = Array.from((e.clipboardData && e.clipboardData.files) || [])
     .filter(f => f.type && f.type.startsWith('image/'));
-  if (files.length) { e.preventDefault(); addImages(files); }
+  if (files.length) { e.preventDefault(); addFiles(files); }
 });
 
-$('imageParseBtn').addEventListener('click', async () => {
-  if (!pendingImages.length) { toast('先拖一张截图进来', 'error'); return; }
-  if (!aiConfigured()) {
-    toast('先去「AI 设置」选一个会看图的模型、粘贴 Key', 'error', 6000);
-    switchTab('ai'); return;
-  }
-  if (recipients.length && !confirm(`识别结果会替换当前的 ${recipients.length} 条收件人，继续？`)) return;
+$('aiParseBtn').addEventListener('click', async () => {
+  const text = ($('aiText') && $('aiText').value.trim()) || '';
+  if (!pendingFiles.length && !text) { toast('先丢文件进来，或者粘一段文字', 'error'); return; }
+  if (!aiConfigured()) { toast('先在上面选一个提供商、粘贴 Key', 'error', 6000); openAiEntry(); return; }
 
-  const btn = $('imageParseBtn');
-  btn.disabled = true; btn.textContent = '识别中…（大图要十几秒）';
+  const btn = $('aiParseBtn');
+  btn.disabled = true; btn.textContent = 'AI 正在读…（大文件要十几秒）';
   const fd = new FormData();
-  pendingImages.forEach(f => fd.append('files', f));
-  fd.append('hint', $('imageHint').value.trim());
+  pendingFiles.forEach(f => fd.append('files', f));
+  if (text) fd.append('files', new File([text], '粘贴的文字.txt', { type: 'text/plain' }));
+  fd.append('hint', $('aiHint').value.trim());
   try {
-    const res = await api('POST', '/api/ai/parse-images', fd);
-    if (applyRecipients(res.recipients, { confirmReplace: true }) === null) {
-      btn.disabled = false; btn.textContent = '识别截图里的收件人'; return;
-    }
+    const res = await api('POST', '/api/ai/parse-files', fd);
+    const { added, dup } = applyRecipients(res.recipients);
     renderRecipients();
-    showParseErrors([], res.recipients.length ? [] : ['图里没有识别到收件人，换一张清晰点的，或补一句说明']);
-    pendingImages = [];
-    renderImages();
-    $('imageHint').value = '';
-    toast(`识别出 ${recipients.length} 条收件人`, 'success', 5000);
+    const skipped = res.files_skipped || [];
+    showParseErrors(skipped, res.recipients.length ? [] : ['没读出一家公司，换一份材料，或在「补充说明」里写清楚要什么']);
+    $('aiParseResult').innerHTML = `<p class="tip">读了：${esc((res.files_used || []).join('、'))}`
+      + `${skipped.length ? '；跳过：' + esc(skipped.join('；')) : ''}</p>`
+      + `<p class="tip">识别出 ${res.recipients.length} 条，用的是 ${esc(res.model || '')}。识别结果在下方的收件人表里，可直接改。</p>`;
+    pendingFiles = []; renderFileList();
+    $('aiText').value = ''; $('aiHint').value = '';
+    toast(`新增 ${added} 条${dup ? `，${dup} 条重复已跳过` : ''}，当前共 ${recipients.length} 条`,
+      added ? 'success' : 'error', 5000);
   } catch (e) {
     toast(e.message, 'error', 9000);
   }
-  btn.disabled = false; btn.textContent = '识别截图里的收件人';
+  btn.disabled = false; btn.textContent = '让 AI 读这些材料';
 });
+
+// AI 的角色设定（prompts/recipient_soul.md），让用户知道它按什么规则在干活
+let soulLoaded = false;
+async function loadSoul() {
+  if (soulLoaded) return;
+  try {
+    const r = await api('GET', '/api/ai/soul?name=recipient');
+    $('soulPreview').textContent = r.content;
+    soulLoaded = true;
+  } catch (e) {
+    $('soulPreview').textContent = '（读取失败：' + e.message + '）';
+  }
+}
 
 // ── AI 设置 ──
 let aiState = { provider: "" };
@@ -382,11 +401,13 @@ function renderAiStatus() {
   const a = config.ai || {};
   const line = aiConfigured()
     ? `当前 AI：<strong>${esc(a.provider)} · ${esc(a.model)}</strong>`
-    : '还没配置 AI（只影响截图/文字提取，表格导入不需要它）';
+    : '还没配置 AI（只影响 AI 输入、读简历、改写正文；Excel 导入不需要它）';
   ['aiStatusRecipients', 'aiStatusBody'].forEach(id => {
     const el = $(id); if (!el) return;
-    el.innerHTML = line + ' · <a href="#" data-goto-ai>去 AI 设置</a>';
+    el.innerHTML = line + ' · <a href="#" data-goto-ai>去配置</a>';
   });
+  const setup = $('aiSetup');
+  if (setup) setup.open = !aiConfigured();
   const el = $('aiStatus');
   if (el) {
     el.innerHTML = aiConfigured()
@@ -394,7 +415,7 @@ function renderAiStatus() {
       : '未配置。选一个提供商、粘贴 Key，点「测试连接」确认可用。';
   }
   document.querySelectorAll('[data-goto-ai]').forEach(link => {
-    link.addEventListener('click', e => { e.preventDefault(); switchTab('ai'); });
+    link.addEventListener('click', e => { e.preventDefault(); openAiEntry(); });
   });
 }
 
@@ -437,7 +458,7 @@ function selectProvider(name) {
   else { link.style.display = 'none'; }
 
   $('aiVisionHint').textContent = (preset.vision && preset.vision.length)
-    ? `图片识别用：${preset.vision.join(' / ')}` : '';
+    ? '这个模型能看图' : '这个模型看不了图，截图会被跳过';
   $('aiTestResult').style.display = 'none';
   renderProviderCards();
 }
@@ -522,27 +543,97 @@ $('testAiBtn').addEventListener('click', async () => {
   btn.disabled = false; btn.textContent = '测试连接';
 });
 
-$('aiFillBtn').addEventListener('click', async () => {
-  const input = $('aiInput').value.trim();
-  if (!input) { toast('先粘贴公司信息', 'error'); return; }
-  if (recipients.length && !confirm(`AI 提取会替换当前的 ${recipients.length} 条收件人，继续？`)) return;
-  if (!aiConfigured()) {
-    toast('先去「AI 设置」选提供商、粘贴 Key', 'error', 6000);
-    switchTab('ai'); return;
+// ── 从简历自动填写个人信息 ──
+$('resumeFillBtn').addEventListener('click', async () => {
+  const picked = selectedAttachments();
+  if (!picked.length) {
+    toast('先去「附件」页上传简历并勾选，这里才能读', 'error', 6000);
+    switchTab('attachments');
+    return;
   }
-  const btn = $('aiFillBtn');
-  btn.disabled = true; btn.textContent = 'AI 分析中…';
+  // 勾了多份时优先读文件名像简历的那份
+  const resume = picked.find(a => /简历|resume|cv/i.test(a.name)) || picked[0];
+  if (!aiConfigured()) {
+    toast('自动读简历要先配 AI（只配一次）', 'error', 6000);
+    openAiEntry();
+    return;
+  }
+  const btn = $('resumeFillBtn');
+  btn.disabled = true; btn.textContent = '正在读简历…';
   try {
-    const res = await api('POST', '/api/ai/fill-template', { input });
-    if (applyRecipients(res.recipients, { confirmReplace: true }) === null) {
-      btn.disabled = false; btn.textContent = 'AI 自动填充'; return;
-    }
-    renderRecipients();
-    showParseErrors([], res.recipients.length ? [] : ['AI 没有提取到收件人，检查一下输入内容']);
-    toast(`AI 提取了 ${recipients.length} 条`, 'success');
-  } catch (e) { toast(e.message, 'error', 6000); }
-  btn.disabled = false; btn.textContent = 'AI 自动填充';
+    const res = await api('POST', '/api/ai/resume-fill', { filename: resume.path });
+    const f = res.fields || {};
+    const map = { '姓名': 'userName', '学校': 'userSchool', '专业': 'userMajor',
+                  '年级': 'userGrade', '电话': 'userPhone', '邮箱': 'userEmail' };
+    let filled = 0, missed = [];
+    Object.entries(map).forEach(([k, id]) => {
+      const val = (f[k] || '').trim();
+      if (val) { $(id).value = val; filled += 1; } else { missed.push(k); }
+    });
+    $('resumeFillHint').textContent = filled
+      ? `已从「${res.filename}」填入 ${filled} 项${missed.length ? '，没读到的：' + missed.join('、') + '（自己补一下）' : ''}。核对后点「保存个人信息」。`
+      : `这份简历里没读到可用信息${f.note ? '：' + f.note : ''}。手动填一下，或换一份文字版简历。`;
+    toast(filled ? `读到了 ${filled} 项，核对后保存` : '没读到信息，手动填一下', filled ? 'success' : 'error', 6000);
+  } catch (e) {
+    toast(e.message, 'error', 9000);
+  }
+  btn.disabled = false; btn.textContent = '从简历自动填写';
 });
+
+// ── 发出的邮件长什么样 ──
+let mailPreviewTimer = null;
+
+function queueMailPreview() {
+  clearTimeout(mailPreviewTimer);
+  mailPreviewTimer = setTimeout(loadMailPreview, 500);
+}
+
+async function loadMailPreview() {
+  const box = $('mailPreview');
+  if (!box) return;
+  const chosen = selectedAttachments();
+  const first = recipients[0];
+  if (!first) {
+    box.innerHTML = '<p class="tip">先在「收件人」页导入名单。这里会显示收件人实际看到的邮件。</p>';
+    return;
+  }
+  try {
+    const res = await api('POST', '/api/preview', {
+      recipients: recipients.slice(0, 1), limit: 1,
+      body: $('bodyEditor').value, subject: $('subjectEditor').value, user: gatherUser(),
+    });
+    const it = (res.items || [])[0];
+    if (!it) throw new Error('预览为空');
+    const fromName = $('senderName').value.trim();
+    const fromMail = $('emailAddr').value.trim();
+    const fromText = fromMail
+      ? `${esc(fromName || '（未填发件人名称）')} &lt;${esc(fromMail)}&gt;`
+      : '<span class="tip">还没配发件邮箱，去「邮箱配置」填一下</span>';
+    const attachHtml = chosen.length
+      ? chosen.map(a => `<span class="attach-chip"><span class="attach-name">${esc(a.name)}</span>`
+          + `<span class="attach-size">${fmtSize(a.size)}</span></span>`).join('')
+      : '<span class="tip">没有勾选附件——投简历却忘了附简历是最常见的翻车。</span>';
+    box.innerHTML = `
+      <div class="mail-card">
+        <div class="mail-head">
+          <div class="mail-line"><span class="mail-label">发件人</span>
+            <span>${fromText}</span></div>
+          <div class="mail-line"><span class="mail-label">收件人</span>
+            <span>${esc(it.company || '')} &lt;${esc(it.email)}&gt;</span></div>
+          <div class="mail-line"><span class="mail-label">主题</span>
+            <strong class="mail-subject">${esc(it.subject || '（空主题）')}</strong></div>
+        </div>
+        <div class="mail-body">${it.html || `<pre>${esc(it.body || '')}</pre>`}</div>
+        <div class="mail-attach">
+          <div class="mail-label">附件 ${chosen.length ? '· ' + chosen.length + ' 个' : ''}</div>
+          <div class="attach-chips">${attachHtml}</div>
+        </div>
+      </div>
+      <p class="tip">这是第 1 封的样子（${esc(it.company || it.email)}）。其余每封只有变量不同。</p>`;
+  } catch (e) {
+    box.innerHTML = `<p class="tip">做不出预览：${esc(e.message)}</p>`;
+  }
+}
 
 // ── 正文 ──
 function gatherUser() {
@@ -574,7 +665,13 @@ $('saveBodyBtn').addEventListener('click', async () => {
       subject_template: $('subjectEditor').value,
     });
     toast('正文与主题已保存', 'success');
+    queueMailPreview();
   } catch (e) { toast(e.message, 'error'); }
+});
+
+['bodyEditor', 'subjectEditor', 'senderName', 'emailAddr'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('input', () => { if ($('mailPreview')) queueMailPreview(); });
 });
 
 function updateVarHint() {
@@ -605,7 +702,7 @@ async function sendBodyChat() {
   const msg = input.value.trim();
   if (!msg) return;
   if (!aiConfigured()) {
-    toast('先去「AI 设置」选提供商、粘贴 Key', 'error', 6000);
+    toast('先在「收件人 → AI 输入」里接上 AI', 'error', 6000);
     switchTab('ai'); return;
   }
   input.value = '';

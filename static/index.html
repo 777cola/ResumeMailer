@@ -18,9 +18,8 @@
       <button class="tab" data-tab="guide">上手</button>
       <button class="tab active" data-tab="config">邮箱配置</button>
       <button class="tab" data-tab="recipients">收件人</button>
-      <button class="tab" data-tab="body">正文</button>
       <button class="tab" data-tab="attachments">附件</button>
-      <button class="tab" data-tab="ai">AI 设置</button>
+      <button class="tab" data-tab="body">正文</button>
       <button class="tab" data-tab="send">发送</button>
       <button class="tab" data-tab="logs">日志</button>
     </nav>
@@ -51,6 +50,10 @@
           <p>常见三种：触发邮箱每日上限（QQ 个人约 50 封/天）、授权码失效、网络中断。失败的信不会记成「已投递」，修好后勾选「跳过已投递」重跑，只会补发失败的。</p></details>
         <details class="faq"><summary>会被当成垃圾邮件吗？</summary>
           <p>短时间大量同文邮件容易触发。建议降到 10 封/分钟、主题带姓名和岗位、别用「群发」「通知」这类词、别一次发几百封。</p></details>
+        <details class="faq"><summary>没有 Excel，只有截图或 PDF 怎么办？</summary>
+          <p>「收件人 → AI 输入」把文件拖进去就行：截图、PDF、Word、Excel、聊天记录都能读。一份材料里有多家公司会被拆成多条，没有邮箱的公司也会列出来标出来让你补。前提是先接上 AI（选一个提供商、粘一次 Key）。</p></details>
+        <details class="faq"><summary>AI 会看到我的简历吗？</summary>
+          <p>只有你点「从简历自动填写」时，那份简历的文字才会发给你自己选的那家模型（DeepSeek / ChatGPT / Claude…）。不点就不上传，本程序自己的服务器也不保存任何内容。</p></details>
         <details class="faq"><summary>表格里多加一列「岗位」能用在正文里吗？</summary>
           <p>能。除「公司名称 / 收件人邮箱 / 邮件主题」外的任何列都会变成变量，正文写 {岗位} 就替换成那一行的值。</p></details>
         <details class="faq"><summary>我的授权码会被上传吗？</summary>
@@ -118,58 +121,123 @@
 
     <!-- ═══ 2 收件人 ═══ -->
     <section id="tab-recipients" class="tab-content">
-      <h2>收件人列表</h2>
-      <div class="card">
-        <p class="tip" id="aiStatusRecipients" style="margin-bottom:10px;"></p>
+      <h2>收件人</h2>
 
-        <label class="checkbox-label" style="margin-bottom:10px;"><input type="checkbox" id="appendMode">
-          新导入追加到现有名单（按邮箱去重），不再整批替换</label>
+      <div class="entry-switch">
+        <button class="entry-card active" data-entry="manual">
+          <span class="entry-title">手动输入</span>
+          <span class="entry-desc">下载 Excel 模板，填好传回来。全程不经过 AI、不用配 Key，快且可核对。</span>
+          <span class="entry-radio" aria-hidden="true"></span>
+        </button>
+        <button class="entry-card" data-entry="ai">
+          <span class="entry-title">AI 输入</span>
+          <span class="entry-desc">截图、PDF、Word、聊天记录、表格直接丢进来，AI 自己找公司、邮箱、岗位。</span>
+          <span class="entry-radio" aria-hidden="true"></span>
+        </button>
+      </div>
 
-        <div class="sub-tabs">
-          <button class="sub-tab active" data-method="excel">上传表格</button>
-          <button class="sub-tab" data-method="images">截图 / 图片</button>
-          <button class="sub-tab" data-method="paste">粘贴文字</button>
-          <button class="sub-tab" data-method="ai">粘贴 AI 提取</button>
-        </div>
-
-        <div id="method-excel" class="method-panel active">
-          <p class="desc">
-            支持 .xlsx / .csv。表格里除了「公司名称、收件人邮箱、邮件主题」，多加的列（如「岗位」）会自动变成变量
-            <a href="/api/template/download" class="link-btn" download>下载模板</a>
-          </p>
-          <div class="upload-zone" id="excelUploadZone">
-            <p>点击或拖拽 Excel / CSV 到此处</p>
-            <input type="file" accept=".xlsx,.xlsm,.csv,.txt" id="excelFileInput" hidden>
+      <div id="entry-manual" class="entry-panel active">
+        <div class="card">
+          <div class="step-row">
+            <span class="step-num">1</span>
+            <div class="step-body">
+              <p class="step-title">下载模板，按列填</p>
+              <p class="desc">必填两列：公司名称、收件人邮箱。邮件主题可留空（用正文页的主题模板）。
+                多加的列（岗位、城市、HR）会自动变成变量，正文里写 <code>{岗位}</code> 就能用。</p>
+              <a href="/api/template/download" class="btn btn-primary" download>下载 Excel 模板</a>
+            </div>
           </div>
-        </div>
+          <div class="step-row">
+            <span class="step-num">2</span>
+            <div class="step-body">
+              <p class="step-title">填好之后传回来</p>
+              <div class="upload-zone" id="excelUploadZone">
+                <p>点击或拖拽 Excel / CSV 到此处</p>
+                <input type="file" accept=".xlsx,.xlsm,.csv,.txt" id="excelFileInput" hidden>
+              </div>
+            </div>
+          </div>
 
-        <div id="method-paste" class="method-panel">
-          <p class="desc">直接从 Excel 复制几行粘进来（含表头），或者一行一个邮箱。制表符分隔即可。</p>
-          <textarea id="pasteInput" rows="6" placeholder="公司名称	收件人邮箱	岗位&#10;华泰资产	hr@htasset.com	量化研究&#10;中信证券	hr@citics.com	行研"></textarea>
+          <details class="mini-details">
+            <summary>没有 Excel？直接把几行粘进来也行</summary>
+            <p class="desc">从 Excel 复制（含表头）或一行一个邮箱，制表符分隔。</p>
+            <textarea id="pasteInput" rows="5" placeholder="公司名称	收件人邮箱	岗位&#10;华泰资产	hr@htasset.com	量化研究&#10;中信证券	hr@citics.com	行研"></textarea>
+            <div class="form-actions">
+              <button class="btn btn-secondary" id="pasteParseBtn">解析粘贴内容</button>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <div id="entry-ai" class="entry-panel">
+        <div class="card ai-setup-card">
+          <details id="aiSetup" open>
+            <summary>
+              <span class="setup-title">1. 接上 AI</span>
+              <span class="tip" id="aiStatusRecipients"></span>
+              <span class="setup-hint">只需配一次，以后直接丢文件</span>
+            </summary>
+          <div id="aiProviderCards" class="provider-grid" style="margin-top:12px;"></div>
+          <div class="form-row" style="margin-top:12px;">
+            <div class="form-group flex-1">
+              <label>模型 <span class="tip" id="aiVisionHint"></span></label>
+              <select id="aiModelSelect"></select>
+              <input type="text" id="aiModelCustom" placeholder="自定义模型名" style="display:none;margin-top:8px;">
+            </div>
+            <div class="form-group flex-1">
+              <label>API Key</label>
+              <input type="password" id="aiKeyInput" placeholder="粘贴这里，保存过可留空" autocomplete="new-password">
+            </div>
+          </div>
+          <div class="form-group" id="aiBaseUrlGroup" style="display:none;">
+            <label>Base URL <span class="tip">OpenAI 兼容地址，形如 https://xxx/v1</span></label>
+            <input type="text" id="aiBaseUrlInput" placeholder="https://api.example.com/v1">
+          </div>
+          <div class="test-result" id="aiTestResult" style="display:none;"></div>
           <div class="form-actions">
-            <button class="btn btn-primary" id="pasteParseBtn">解析粘贴内容</button>
+            <button class="btn btn-primary" id="saveAiBtn">保存 AI 配置</button>
+            <button class="btn btn-secondary" id="testAiBtn">测试连接</button>
+            <a class="ai-docs-link" id="aiDocsLink" href="#" target="_blank" rel="noopener" style="display:none;">去申请 Key</a>
           </div>
+          <p class="tip" id="aiStatus" style="margin-top:10px;"></p>
+
+          <details class="soul-details">
+            <summary>AI 按什么规则读你的材料</summary>
+            <pre id="soulPreview" class="soul-text">加载中…</pre>
+          </details>
+          </details>
         </div>
 
-        <div id="method-images" class="method-panel">
-          <p class="desc">招聘群聊天记录、岗位截图、表格照片都行。拖进来或用 ⌘V 直接粘贴截图；需要模型会看图（GPT-4o / Claude / qwen-vl-max / glm-4v-plus）。</p>
-          <div class="upload-zone" id="imageUploadZone">
-            <p>点击、拖拽或粘贴截图（最多 6 张）</p>
-            <input type="file" accept="image/*" multiple id="imageInput" hidden>
+        <div class="card">
+          <div class="card-head">
+            <h3>2. 把这些文件丢进来</h3>
+            <span class="tip">最多 6 个 · 单个 ≤12MB</span>
           </div>
-          <div id="imagePreview" class="image-grid"></div>
-          <textarea id="imageHint" rows="2" placeholder="补充说明（可选）：如「只要邮箱，忽略宣讲会时间」「岗位按公司对应」"></textarea>
-          <button class="btn btn-primary" id="imageParseBtn">识别截图里的收件人</button>
+          <div class="upload-zone" id="aiUploadZone">
+            <p>拖进来，或点击选择：截图、PDF、Word、Excel、文本都行</p>
+            <p class="tip">也可以直接 ⌘V 粘贴截图</p>
+            <input type="file" multiple id="aiFileInput" hidden>
+          </div>
+          <div id="aiFileList" class="file-list"></div>
+          <details class="mini-details">
+            <summary>没有文件？直接粘一段文字</summary>
+            <textarea id="aiText" rows="5" placeholder="如：华泰证券量化组在招实习生，简历发 hr@htsc.com，主题写「姓名-学校-量化」"></textarea>
+          </details>
+          <div class="form-group" style="margin-top:10px;">
+            <label>补充说明 <span class="tip">可选，写清楚你只要什么</span></label>
+            <input type="text" id="aiHint" placeholder="如：只要上海的机会，忽略宣讲会时间">
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" id="aiParseBtn">让 AI 读这些材料</button>
+          </div>
+          <div id="aiParseResult" class="parse-result"></div>
         </div>
+      </div>
 
-        <div id="method-ai" class="method-panel">
-          <p class="desc">把招聘信息/聊天记录粘进来，AI 提取公司、邮箱、岗位。邮箱不对的会标出来。</p>
-          <textarea id="aiInput" rows="6" placeholder="示例：&#10;华泰资产 - 资产配置实习生 - hr@htasset.com&#10;中信证券 - 研究部实习生 - hr@citics.com"></textarea>
-          <button class="btn btn-primary" id="aiFillBtn">AI 自动填充</button>
-          <div id="aiFillResult"></div>
-        </div>
+      <p class="tip import-note">新导入会按邮箱自动合并：同一个邮箱不会重复，已有的行保留不动。</p>
 
-        <div id="recipientTableWrapper" style="display:none;margin-top:16px;">
+      <div id="recipientTableWrapper" style="display:none;">
+        <div class="card">
           <h3 style="display:flex;align-items:center;gap:8px;">收件人列表
             <span id="recipientCount" class="badge"></span>
             <span class="tip" id="recipientVars"></span></h3>
@@ -203,7 +271,11 @@
               <div class="form-group flex-1"><label>电话</label><input type="text" id="userPhone" placeholder="手机号"></div>
               <div class="form-group flex-1"><label>邮箱</label><input type="email" id="userEmail" placeholder="联系邮箱"></div>
             </div>
-            <div class="form-actions"><button class="btn btn-primary" id="saveUserInfoBtn">保存个人信息</button></div>
+            <div class="form-actions">
+              <button class="btn btn-primary" id="saveUserInfoBtn">保存个人信息</button>
+              <button class="btn btn-secondary" id="resumeFillBtn">从简历自动填写</button>
+            </div>
+            <p class="tip" id="resumeFillHint">先到「附件」页上传并勾选简历，再点「从简历自动填写」，就能读到姓名、学校、专业、年级、电话、邮箱。</p>
           </div>
         </details>
 
@@ -268,49 +340,19 @@
         </div>
         <div id="attachList" class="file-list"></div>
       </div>
-    </section>
 
-    <!-- ═══ 5 AI 设置 ═══ -->
-    <section id="tab-ai" class="tab-content">
-      <h2>AI 设置</h2>
-      <p class="desc">选提供商 → 粘贴 API Key，接口地址和模型都预填好了。AI 用来把截图/聊天记录变成收件人、改写求职信。</p>
-      <div class="card">
-        <div class="form-group">
-          <label>模型提供商</label>
-          <div id="aiProviderCards" class="provider-grid"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group flex-1">
-            <label>模型 <span class="tip" id="aiVisionHint"></span></label>
-            <select id="aiModelSelect"></select>
-            <input type="text" id="aiModelCustom" placeholder="自定义模型名" style="display:none;margin-top:8px;">
-          </div>
-          <div class="form-group flex-1">
-            <label>API Key</label>
-            <input type="password" id="aiKeyInput" placeholder="粘贴这里，保存过可留空" autocomplete="new-password">
-          </div>
-        </div>
-        <div class="form-group" id="aiBaseUrlGroup" style="display:none;">
-          <label>Base URL <span class="tip">OpenAI 兼容地址，形如 https://xxx/v1</span></label>
-          <input type="text" id="aiBaseUrlInput" placeholder="https://api.example.com/v1">
-        </div>
-        <div class="test-result" id="aiTestResult" style="display:none;"></div>
-        <div class="form-actions">
-          <button class="btn btn-primary" id="saveAiBtn">保存 AI 配置</button>
-          <button class="btn btn-secondary" id="testAiBtn">测试连接</button>
-          <a class="ai-docs-link" id="aiDocsLink" href="#" target="_blank" rel="noopener" style="display:none;">去申请 Key</a>
-        </div>
-        <p class="tip" id="aiStatus" style="margin-top:10px;"></p>
-      </div>
+      <h3 style="margin:26px 0 8px;">发出的邮件长什么样</h3>
+      <p class="desc">下面是一封真实投递出去的邮件（QQ 邮箱网页版，姓名/邮箱/学校已打码）：
+        主题按模板逐封渲染，正文里的变量已替换，简历作为 PDF 附件。</p>
+      <figure class="mail-shot">
+        <img src="/static/example-sent-email.png" alt="真实投递示例：主题、投递成功状态、正文与简历附件"
+             loading="lazy">
+        <figcaption>真实投递示例。主题格式、投递状态、正文、附件名与大小，收件人看到的就是这些。</figcaption>
+      </figure>
 
-      <div class="card">
-        <h3>AI 在这三处起作用</h3>
-        <ul class="plain-list">
-          <li><strong>截图 / 聊天记录 → 收件人</strong>：需要支持图片输入的模型</li>
-          <li><strong>杂乱文字 → 公司、邮箱、岗位</strong>：任何模型都行</li>
-          <li><strong>改写正文</strong>：保留 <code>{姓名}</code> <code>{公司名}</code> 这类变量</li>
-        </ul>
-        <p class="tip">不配 AI 也能正常用：表格导入、模板变量、批量发送都不依赖 AI。</p>
+      <h4 class="preview-sub">换成你自己的内容，长这样</h4>
+      <div class="mail-preview" id="mailPreview">
+        <p class="tip">在「正文」页填好内容后，这里会显示预览。</p>
       </div>
     </section>
 
