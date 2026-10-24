@@ -57,7 +57,7 @@ def cancel_job(job_id: str) -> bool:
 
 
 def _run(job: dict, cfg_email, recipients, body, subject_template, attachments,
-         rate, user_info, daily_limit, cc_self):
+         rate, user_info, daily_limit, cc_self, fixed_body=False):
     logs = []
 
     def on_result(r):
@@ -97,6 +97,7 @@ def _run(job: dict, cfg_email, recipients, body, subject_template, attachments,
             cc_self=cc_self,
             progress=on_result,
             cancel=job["cancel"],
+            fixed_body=fixed_body,
         )
         job["stopped"] = out.get("stopped") or ""
         job["draft_box"] = out.get("draft_box") or ""
@@ -114,7 +115,8 @@ def _run(job: dict, cfg_email, recipients, body, subject_template, attachments,
 
 
 def start_job(cfg_email, recipients, body, subject_template="", attachments=None,
-              mode="draft", rate=20, user_info=None, daily_limit=0, cc_self=False) -> str:
+              mode="draft", rate=20, user_info=None, daily_limit=0, cc_self=False,
+              fixed_body=False) -> str:
     with _LOCK:
         if _ACTIVE["id"]:
             cur = _JOBS.get(_ACTIVE["id"])
@@ -140,7 +142,7 @@ def start_job(cfg_email, recipients, body, subject_template="", attachments=None
     t = threading.Thread(
         target=_run,
         args=(job, cfg_email, recipients, body, subject_template,
-              attachments or [], rate, user_info, daily_limit, cc_self),
+              attachments or [], rate, user_info, daily_limit, cc_self, fixed_body),
         daemon=True,
     )
     t.start()

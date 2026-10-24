@@ -51,12 +51,16 @@ def strip_tags(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
-def render_email(recipient: dict, user: dict, body_template: str, subject_template: str) -> dict:
-    """返回 {subject, body, html}；主题优先用该行自己的，空则用主题模板"""
+def render_email(recipient: dict, user: dict, body_template: str, subject_template: str,
+                 render_body: bool = True) -> dict:
+    """返回 {subject, body, html}；主题优先用该行自己的，空则用主题模板
+
+    render_body=False 用于「统一正文」模式：正文原样发，花括号也不替换（主题照旧替换）。
+    """
     ctx = build_context(recipient, user)
     subject_src = (recipient.get("subject") or "").strip() or subject_template or ""
     subject = render(subject_src, ctx).strip()
-    body = render(body_template or "", ctx)
+    body = render(body_template or "", ctx) if render_body else (body_template or "")
     if _HTMLISH.search(body or ""):
         # 正文本身就是 HTML：HTML 部分原样发，纯文本部分去标签
         return {"subject": subject, "body": strip_tags(body), "html": body}

@@ -372,3 +372,17 @@ table tr:hover td { background: #f5f8fc; }
 .var-chip:hover { background: #e6f0ff; border-color: #b9d3f7; }
 .var-chip:active { transform: translateY(1px); }
 .var-chip-custom { border-color: #cfe3d6; background: #f4fbf6; color: #2b6b46; }
+
+/* 正文模式二选一 */
+.body-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+@media (max-width: 720px) { .body-mode { grid-template-columns: 1fr; } }
+.mode-card { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px;
+  border: 1px solid #e3e9f2; border-radius: 10px; background: #fcfdff; cursor: pointer; }
+.mode-card:hover { border-color: #cfe0f7; }
+.mode-card input { margin-top: 3px; accent-color: #1A4B8C; }
+.mode-card:has(input:checked) { border-color: #1A4B8C; background: #f3f8ff;
+  box-shadow: inset 0 0 0 1px #1A4B8C; }
+.mode-body { display: flex; flex-direction: column; gap: 4px; }
+.mode-title { font-size: 13px; font-weight: 600; color: #1c2b3a; }
+.mode-card:has(input:checked) .mode-title { color: #1A4B8C; }
+.mode-desc { font-size: 12px; line-height: 1.6; color: #7c8b9c; }

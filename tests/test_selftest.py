@@ -846,6 +846,26 @@ def test_default_body_template_contents():
     assert "「" not in t and "」" not in t
 
 
+def test_render_email_fixed_body_mode():
+    """统一正文模式：正文原样发，主题照旧替换"""
+    from engine.render import render_email
+    rec = {"company": "中金公司", "email": "a@x.com", "vars": {"岗位": "量化实习"}}
+    user = {"姓名": "戚俊皓", "学校": "华东理工", "专业": "金融学", "年级": "大四"}
+    body = "我是{姓名}，申请{公司名}的{岗位}。"
+
+    out = render_email(rec, user, body, "申请-{岗位}", render_body=True)
+    assert out["body"] == "我是戚俊皓，申请中金公司的量化实习。", out["body"]
+    assert out["subject"] == "申请-量化实习"
+
+    fixed = render_email(rec, user, body, "申请-{岗位}", render_body=False)
+    assert fixed["body"] == body, fixed["body"]           # 一个花括号都不动
+    assert fixed["subject"] == "申请-量化实习"             # 主题仍然替换
+
+    # 两封收件人的正文必须完全一致
+    rec2 = {"company": "华泰", "email": "b@x.com", "vars": {"岗位": "行研"}}
+    assert render_email(rec2, user, body, "", render_body=False)["body"] == fixed["body"]
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     failed = 0

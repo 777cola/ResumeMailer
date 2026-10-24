@@ -210,6 +210,7 @@ def _config_payload() -> dict:
             "grade": cfg.user.grade, "phone": cfg.user.phone, "email": cfg.user.email,
         },
         "body_template": cfg.body_template,
+        "body_mode": cfg.body_mode,
         "default_body": DEFAULT_BODY_TEMPLATE,
         "subject_template": cfg.subject_template,
         "send_rate": cfg.send_rate,
@@ -266,6 +267,8 @@ def save_settings(data: dict):
     cfg = load_config()
     if "body_template" in data:
         cfg.body_template = data["body_template"] or ""
+    if data.get("body_mode") in ("vars", "fixed"):
+        cfg.body_mode = data["body_mode"]
     if "subject_template" in data:
         cfg.subject_template = data["subject_template"] or ""
     if "send_rate" in data:
@@ -386,8 +389,9 @@ def preview(data: dict):
     limit = max(1, min(50, int(data.get("limit") or 5)))
 
     items = []
+    fixed_body = (data.get("body_mode") or cfg.body_mode) == "fixed"
     for r in recipients[:limit]:
-        rendered = render_email(r, user, body, subject)
+        rendered = render_email(r, user, body, subject, render_body=not fixed_body)
         items.append({
             "seq": r.get("seq"), "company": r.get("company", ""),
             "email": r.get("email", ""), "subject": rendered["subject"],
@@ -803,7 +807,8 @@ def send_to_self(data: dict):
                                 "专业": cfg.user.major, "年级": cfg.user.grade,
                                 "电话": cfg.user.phone, "邮箱": cfg.user.email}
     rendered = render_email(sample, user, data.get("body", cfg.body_template),
-                            data.get("subject", cfg.subject_template))
+                            data.get("subject", cfg.subject_template),
+                            render_body=(data.get("body_mode") or cfg.body_mode) != "fixed")
     attachments = _requested_attachments(data, cfg)
     try:
         addr = send_test(cfg.email, rendered["subject"], rendered["body"],
@@ -910,7 +915,8 @@ def send_start(data: dict):
         job_id = jobs.start_job(
             cfg_email=cfg.email, recipients=job_recipients, body=body,
             subject_template=subject, attachments=attachments, mode=mode,
-            rate=rate, user_info=user, daily_limit=daily_limit, cc_self=cc_self)
+            rate=rate, user_info=user, daily_limit=daily_limit, cc_self=cc_self,
+            fixed_body=(data.get("body_mode") or cfg.body_mode) == "fixed")
     except RuntimeError as e:
         raise HTTPException(409, str(e))
     return {"ok": True, "job_id": job_id, "total": len(recipients),

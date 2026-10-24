@@ -601,6 +601,7 @@ async function loadMailPreview() {
     const res = await api('POST', '/api/preview', {
       recipients: recipients.slice(0, 1), limit: 1,
       body: $('bodyEditor').value, subject: $('subjectEditor').value, user: gatherUser(),
+      body_mode: bodyMode(),
     });
     const it = (res.items || [])[0];
     if (!it) throw new Error('预览为空');
@@ -672,6 +673,59 @@ $('saveBodyBtn').addEventListener('click', async () => {
 ['bodyEditor', 'subjectEditor', 'senderName', 'emailAddr'].forEach(id => {
   const el = $(id);
   if (el) el.addEventListener('input', () => { if ($('mailPreview')) queueMailPreview(); });
+});
+
+
+// ── 正文模式：每封不一样 / 所有邮件同一封 ──
+function bodyMode() {
+  const el = document.querySelector('input[name="bodyMode"]:checked');
+  return el ? el.value : 'vars';
+}
+
+function applyBodyMode(mode, opts = {}) {
+  const fixed = mode === 'fixed';
+  document.querySelectorAll('input[name="bodyMode"]').forEach(r => { r.checked = r.value === mode; });
+  const bar = document.querySelector('.var-bar');
+  if (bar) bar.style.display = fixed ? 'none' : '';
+  const chipTip = document.getElementById('bodyModeHint');
+  if (chipTip) {
+    chipTip.textContent = fixed
+      ? '所有邮件一字不差，花括号不替换——需要每封不同的信息，切到「每封不一样」'
+      : '每封按收件人替换变量';
+  }
+  const fill = $('fillMeBtn');
+  if (fill) fill.style.display = fixed ? '' : 'none';
+  const desc = document.querySelector('.body-mode').closest('.card');
+  if (!opts.silent) {
+    api('POST', '/api/config/settings', { body_mode: mode }).catch(() => {});
+    if ($('mailPreview')) queueMailPreview();
+  }
+}
+
+document.querySelectorAll('input[name="bodyMode"]').forEach(r => {
+  r.addEventListener('change', () => {
+    config.body_mode = bodyMode();
+    applyBodyMode(bodyMode());
+    toast(bodyMode() === 'fixed'
+      ? '已切换：所有邮件用同一封正文，变量不再替换'
+      : '已切换：每封按收件人替换 {姓名} {公司名} 等变量', 'info', 5000);
+  });
+});
+
+$('fillMeBtn').addEventListener('click', () => {
+  const u = gatherUser();
+  const map = { '姓名': u['姓名'], '学校': u['学校'], '专业': u['专业'], '年级': u['年级'],
+                '电话': u['电话'], '邮箱': u['邮箱'] };
+  let text = $('bodyEditor').value;
+  Object.entries(map).forEach(([k, v]) => {
+    if (v) text = text.split(`{${k}}`).join(v);
+  });
+  const left = (text.match(/\{[^{}\n]{1,24}\}/g) || []);
+  $('bodyEditor').value = text;
+  if ($('mailPreview')) queueMailPreview();
+  toast(left.length
+    ? `已填入个人信息；还剩 ${[...new Set(left)].join(' ')} 需要你自己改`
+    : '已填入个人信息', left.length ? 'info' : 'success', 8000);
 });
 
 function updateVarHint() {
@@ -910,6 +964,10 @@ function renderPreflight(p) {
     items.push(['warn', `${p.missing_company.length} 行没有公司名，{公司名} 会是空白。`]);
   }
   const bodyText = ($('bodyEditor').value || '');
+  if (bodyMode() === 'fixed' && /\{[^{}\n]{1,24}\}/.test(bodyText)) {
+    const tokens = [...new Set(bodyText.match(/\{[^{}\n]{1,24}\}/g) || [])].join(' ');
+    items.push(['warn', `「所有邮件同一封」模式下花括号不替换，这些会原样发给 HR：${tokens}。要替换就切到「每封不一样」，或点「把个人信息写进正文」。`]);
+  }
   if (/X{3,}/.test(bodyText) || /X{2,}大学|X{2,}专业/.test(bodyText)) {
     items.push(['warn', '正文里还留着 XXX / XXXX大学 这类占位符，发出去就是「我是XXX」。换成自己的信息，或用 {姓名} {学校} 这些变量。']);
   }
@@ -1081,6 +1139,7 @@ async function startSending(mode, opts = {}) {
       daily_limit: parseInt($('dailyLimitInput').value) || 0,
       cc_self: $('ccSelf').checked,
       include_dead: !!($('includeDead') && $('includeDead').checked),
+      body_mode: bodyMode(),
       skip_sent: !!opts.skipSent,
       limit: opts.limit || 0,
     });
@@ -1363,6 +1422,7 @@ async function init() {
 
   $('bodyEditor').value = config.body_template || '';
   $('subjectEditor').value = config.subject_template || '';
+  applyBodyMode(config.body_mode || 'vars', { silent: true });
   $('rateInput').value = config.send_rate || 20;
   $('dailyLimitInput').value = config.daily_limit || 0;
   $('dailyInfo').textContent = config.daily_limit || '不限';

@@ -312,8 +312,25 @@
           <input type="text" id="subjectEditor" placeholder="实习申请-{姓名}-{学校}-{专业}">
         </div>
 
-        <div class="form-group" style="margin-top:18px;">
-          <label>正文 <span class="tip">默认模板已经写好，改几个词就能用；有现成的正文直接全选粘进来覆盖</span></label>
+        <div class="body-mode" role="radiogroup" aria-label="正文模式">
+          <label class="mode-card">
+            <input type="radio" name="bodyMode" value="vars" checked>
+            <span class="mode-body">
+              <span class="mode-title">每封不一样</span>
+              <span class="mode-desc">正文里的 {姓名} {公司名} {岗位} 等变量按每个收件人替换</span>
+            </span>
+          </label>
+          <label class="mode-card">
+            <input type="radio" name="bodyMode" value="fixed">
+            <span class="mode-body">
+              <span class="mode-title">所有邮件同一封</span>
+              <span class="mode-desc">正文原样发出，一个花括号都不替换</span>
+            </span>
+          </label>
+        </div>
+
+        <div class="form-group" style="margin-top:16px;">
+          <label>正文 <span class="tip" id="bodyModeHint">每封按收件人替换变量</span></label>
           <textarea id="bodyEditor" rows="16"></textarea>
         </div>
         <div class="var-bar">
@@ -334,6 +351,7 @@
         <div class="form-actions">
           <button class="btn btn-primary" id="saveBodyBtn">保存正文与主题</button>
           <button class="btn btn-secondary" id="resetBodyBtn">恢复默认模板</button>
+          <button class="btn btn-secondary" id="fillMeBtn" style="display:none;">把个人信息写进正文</button>
         </div>
 
         <hr class="divider">

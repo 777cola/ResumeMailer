@@ -150,6 +150,7 @@ class AppConfig:
     ai: AIConfig = None
     user: UserInfo = None
     body_template: str = ""
+    body_mode: str = "vars"        # "vars"=按收件人定制；"fixed"=所有邮件正文一模一样
     subject_template: str = ""
     send_rate: int = DEFAULT_RATE
     daily_limit: int = 0            # 0 = 不限制
@@ -201,6 +202,7 @@ def load_config() -> AppConfig:
                              if k in ("provider", "api_key", "model", "base_url")})
         cfg.user = UserInfo(**data.get("user", {}))
         cfg.body_template = data.get("body_template", DEFAULT_BODY_TEMPLATE)
+        cfg.body_mode = data.get("body_mode") if data.get("body_mode") in ("vars", "fixed") else "vars"
         cfg.subject_template = data.get("subject_template", DEFAULT_SUBJECT_TEMPLATE)
         cfg.send_rate = data.get("send_rate", DEFAULT_RATE)
         cfg.daily_limit = data.get("daily_limit", 0)
@@ -228,6 +230,7 @@ def save_config(cfg: AppConfig):
         "ai": asdict(cfg.ai),
         "user": asdict(cfg.user),
         "body_template": cfg.body_template,
+        "body_mode": cfg.body_mode,
         "subject_template": cfg.subject_template,
         "send_rate": cfg.send_rate,
         "daily_limit": cfg.daily_limit,

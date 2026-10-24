@@ -359,6 +359,7 @@ def send_batch(
     cc_self: bool = False,
     progress: Optional[Callable[[dict], None]] = None,
     cancel=None,
+    fixed_body: bool = False,      # 统一正文：不做变量替换
 ) -> dict:
     """
     批量投递。返回 {"results": [...], "stopped": str, "draft_box": str}
@@ -421,7 +422,8 @@ def send_batch(
                       "error": problem})
                 continue
 
-            rendered = render_email(r, user_info or {}, body, subject_template)
+            rendered = render_email(r, user_info or {}, body, subject_template,
+                                    render_body=not fixed_body)
             to_addr = str(r.get("email", "")).strip()
             result = {"company": r.get("company", ""), "email": to_addr,
                       "subject": rendered["subject"], "success": False,
