@@ -76,7 +76,7 @@ AI_PRESETS = {
 }
 
 # 默认正文模板（通用示例）
-DEFAULT_BODY_TEMPLATE = """尊敬的招聘负责人：
+_LEGACY_BODY_TEMPLATES = ("""尊敬的招聘负责人：
 
 您好！
 
@@ -89,7 +89,23 @@ DEFAULT_BODY_TEMPLATE = """尊敬的招聘负责人：
 
 {姓名}
 {邮箱}
-{电话}"""
+{电话}""",)   # 旧版默认正文；没改过的人才升级
+
+DEFAULT_BODY_TEMPLATE = """尊敬的招聘负责人：
+
+您好！
+
+我是{姓名}，{学校}{专业}专业{年级}学生（2027年毕业），现申请贵公司的实习岗位。
+
+我具备扎实的金融理论基础，熟练使用Wind、Choice等金融数据终端及Excel数据处理工具，有良好的英语读写能力和团队协作精神。希望能获得面试机会，进一步沟通我的背景与贵公司岗位的匹配度。
+
+随信附上我的简历，敬请查阅。期待您的回复！
+
+此致
+敬礼
+
+{姓名}
+{邮箱}"""
 
 # 默认主题模板：Excel 里没填主题时用它
 DEFAULT_SUBJECT_TEMPLATE = "实习申请-{姓名}-{学校}-{专业}"
@@ -177,6 +193,9 @@ def load_config() -> AppConfig:
     try:
         data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
         cfg = AppConfig()
+        # 旧版默认正文（用户没动过）自动换成新版；用户自己写的一律不动
+        if data.get("body_template", "").strip() in [x.strip() for x in _LEGACY_BODY_TEMPLATES]:
+            data["body_template"] = DEFAULT_BODY_TEMPLATE
         cfg.email = EmailConfig(**data.get("email", {}))
         cfg.ai = AIConfig(**{k: v for k, v in data.get("ai", {}).items()
                              if k in ("provider", "api_key", "model", "base_url")})

@@ -832,6 +832,20 @@ def test_safe_filename_cross_platform():
     assert server.safe_filename("戚俊皓-华东理工大学-本科-金融.pdf") == "戚俊皓-华东理工大学-本科-金融.pdf"
 
 
+def test_default_body_template_contents():
+    """默认正文就是用户给的那封：段落、变量、落款都要在"""
+    import config
+    t = config.DEFAULT_BODY_TEMPLATE
+    assert t.startswith("尊敬的招聘负责人：")
+    assert "我是{姓名}，{学校}{专业}专业{年级}学生（2027年毕业），现申请贵公司的实习岗位。" in t
+    assert "我具备扎实的金融理论基础，熟练使用Wind、Choice等金融数据终端及Excel数据处理工具" in t
+    assert "随信附上我的简历，敬请查阅。期待您的回复！" in t
+    assert "此致\n敬礼" in t
+    assert t.rstrip().endswith("{姓名}\n{邮箱}")
+    assert "XXX" not in t            # 占位符已经换成变量，不会发出「我是XXX」
+    assert "「" not in t and "」" not in t
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     failed = 0

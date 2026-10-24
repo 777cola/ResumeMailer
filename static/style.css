@@ -165,15 +165,6 @@ table tr:hover td { background: #f5f8fc; }
 .link-btn:hover { background: var(--primary-hover); }
 
 /* Body layout: editor + example side by side */
-.body-layout { display: flex; gap: 20px; }
-.body-editor-col { flex: 3; min-width: 0; }
-.body-example-col { flex: 2; min-width: 240px; }
-.example-panel { background: #f8f9fb; border: 1px solid #e0e4e8; border-radius: var(--radius); padding: 14px; }
-.example-panel h4 { margin: 0 0 8px; font-size: 14px; color: var(--primary); }
-.example-body { font-size: 13px; line-height: 1.7; white-space: pre-wrap; color: #555; background: #fff; padding: 12px; border-radius: 4px; border: 1px solid #eee; }
-.example-body code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
-.example-panel .tip { font-size: 12px; color: var(--text-secondary); }
-.example-panel .tip code { background: #e8ecf1; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: var(--primary); }
 
 /* Divider */
 .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
@@ -186,8 +177,7 @@ table tr:hover td { background: #f5f8fc; }
 
 /* Responsive */
 @media (max-width: 768px) {
-  .body-layout { flex-direction: column; }
-}
+  }
 @media (max-width: 640px) {
   .header { padding: 10px 12px 0; }
   .tabs { gap: 0; }
@@ -373,3 +363,12 @@ table tr:hover td { background: #f5f8fc; }
 .ai-col code { background: #eef3fa; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
 .ai-note { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid #eaeff7;
   font-size: 12px; line-height: 1.7; color: #8a99ab; margin-top: auto; }
+
+/* 正文页：变量快捷插入 */
+.var-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.var-bar-label { font-size: 12px; color: #8a99ab; margin-right: 2px; }
+.var-chip { font-size: 12px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid #d8e6fb; background: #f4f8ff; color: #1A4B8C; line-height: 1.4; }
+.var-chip:hover { background: #e6f0ff; border-color: #b9d3f7; }
+.var-chip:active { transform: translateY(1px); }
+.var-chip-custom { border-color: #cfe3d6; background: #f4fbf6; color: #2b6b46; }

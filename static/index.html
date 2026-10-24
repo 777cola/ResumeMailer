@@ -312,32 +312,28 @@
           <input type="text" id="subjectEditor" placeholder="实习申请-{姓名}-{学校}-{专业}">
         </div>
 
-        <div class="body-layout">
-          <div class="body-editor-col">
-            <div class="form-group">
-              <label>正文模板 <span class="tip">支持变量替换，可用变量见右侧</span></label>
-              <textarea id="bodyEditor" rows="14"></textarea>
-            </div>
-            <div class="form-actions">
-              <button class="btn btn-primary" id="saveBodyBtn">保存正文与主题</button>
-            </div>
-          </div>
-          <div class="body-example-col">
-            <div class="example-panel">
-              <h4>参考示例</h4>
-              <div class="example-body">尊敬的HR：
-
-您好！
-
-我是来自{学校} 27届 {专业}的{姓名}。看到贵司在招聘{岗位}，我符合相关要求，附上简历请查收，希望能获得实习机会。
-
-电话/微信：{电话}
-邮箱：{邮箱}</div>
-              <p class="tip" style="margin-top:8px;">用 <code>{变量名}</code>自动替换为每封邮件对应的内容</p>
-              <p class="tip">内置：<code>{公司名}</code> <code>{姓名}</code> <code>{学校}</code> <code>{专业}</code> <code>{年级}</code> <code>{电话}</code> <code>{邮箱}</code> <code>{技能}</code></p>
-              <p class="tip" id="varHint"></p>
-            </div>
-          </div>
+        <div class="form-group" style="margin-top:18px;">
+          <label>正文 <span class="tip">默认模板已经写好，改几个词就能用；有现成的正文直接全选粘进来覆盖</span></label>
+          <textarea id="bodyEditor" rows="16"></textarea>
+        </div>
+        <div class="var-bar">
+          <span class="var-bar-label">点一下插入</span>
+          <button type="button" class="var-chip" data-var="{姓名}">{姓名}</button>
+          <button type="button" class="var-chip" data-var="{学校}">{学校}</button>
+          <button type="button" class="var-chip" data-var="{专业}">{专业}</button>
+          <button type="button" class="var-chip" data-var="{年级}">{年级}</button>
+          <button type="button" class="var-chip" data-var="{公司名}">{公司名}</button>
+          <button type="button" class="var-chip" data-var="{岗位}">{岗位}</button>
+          <button type="button" class="var-chip" data-var="{邮箱}">{邮箱}</button>
+          <button type="button" class="var-chip" data-var="{电话}">{电话}</button>
+        </div>
+        <p class="tip" style="margin-top:10px;">
+          这些花括号在每封信里会换成对应的内容：<code>{姓名}</code> <code>{学校}</code> 来自上面的个人信息，
+          <code>{公司名}</code> 来自收件人表，<code>{岗位}</code> 这类来自表格里多出来的列。
+        </p>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="saveBodyBtn">保存正文与主题</button>
+          <button class="btn btn-secondary" id="resetBodyBtn">恢复默认模板</button>
         </div>
 
         <hr class="divider">

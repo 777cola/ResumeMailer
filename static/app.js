@@ -675,12 +675,44 @@ $('saveBodyBtn').addEventListener('click', async () => {
 });
 
 function updateVarHint() {
+  const bar = document.querySelector('.var-bar');
+  if (!bar) return;
+  bar.querySelectorAll('.var-chip-custom').forEach(el => el.remove());
   const names = new Set();
   recipients.forEach(r => Object.keys(r.vars || {}).forEach(k => names.add(k)));
-  $('varHint').innerHTML = names.size
-    ? '表格里的自定义列：' + [...names].map(v => `<code>{${esc(v)}}</code>`).join(' ')
-    : '在表格里加一列「岗位」，正文就能写 {岗位}。';
+  const existing = new Set([...bar.querySelectorAll('.var-chip')].map(c => c.dataset.var));
+  [...names].forEach(name => {
+    if (existing.has(`{${name}}`)) return;      // 内置按钮已经有了就别重复
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'var-chip var-chip-custom';
+    chip.dataset.var = `{${name}}`;
+    chip.textContent = `{${name}}`;
+    bar.appendChild(chip);
+  });
 }
+
+// 点变量插入到光标处
+document.addEventListener('click', e => {
+  const chip = e.target.closest && e.target.closest('.var-chip');
+  if (!chip) return;
+  const ta = $('bodyEditor');
+  if (!ta) return;
+  const token = chip.dataset.var || '';
+  const start = ta.selectionStart ?? ta.value.length;
+  const end = ta.selectionEnd ?? start;
+  ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = start + token.length;
+  if ($('mailPreview')) queueMailPreview();
+});
+
+$('resetBodyBtn').addEventListener('click', () => {
+  if (!confirm('用默认模板覆盖现在的正文？你改过的内容会丢。')) return;
+  $('bodyEditor').value = config.default_body || '';
+  if ($('mailPreview')) queueMailPreview();
+  toast('已恢复默认模板，改完记得点「保存正文与主题」', 'success', 6000);
+});
 
 $('bodyChatSend').addEventListener('click', sendBodyChat);
 $('bodyChatInput').addEventListener('keydown', e => {
@@ -876,6 +908,10 @@ function renderPreflight(p) {
   }
   if (p.missing_company.length) {
     items.push(['warn', `${p.missing_company.length} 行没有公司名，{公司名} 会是空白。`]);
+  }
+  const bodyText = ($('bodyEditor').value || '');
+  if (/X{3,}/.test(bodyText) || /X{2,}大学|X{2,}专业/.test(bodyText)) {
+    items.push(['warn', '正文里还留着 XXX / XXXX大学 这类占位符，发出去就是「我是XXX」。换成自己的信息，或用 {姓名} {学校} 这些变量。']);
   }
   const chosenAtt = selectedAttachments();
   const attMb = chosenAtt.reduce((s, a) => s + (a.size || 0), 0) / 1024 / 1024;

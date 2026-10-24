@@ -210,6 +210,7 @@ def _config_payload() -> dict:
             "grade": cfg.user.grade, "phone": cfg.user.phone, "email": cfg.user.email,
         },
         "body_template": cfg.body_template,
+        "default_body": DEFAULT_BODY_TEMPLATE,
         "subject_template": cfg.subject_template,
         "send_rate": cfg.send_rate,
         "daily_limit": cfg.daily_limit,
